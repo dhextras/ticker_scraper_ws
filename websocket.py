@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime
 
+import pytz
 import websockets
 from dotenv import load_dotenv
 
@@ -56,7 +57,9 @@ async def handle_websocket(websocket, path):
             name = data.get("name", "Unknown")
             message_type = data.get("type", "default")
             ticker = data.get("ticker", "")
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now(pytz.timezone("US/Eastern")).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
             save_message(sender, name, message_type, timestamp, ticker)
 

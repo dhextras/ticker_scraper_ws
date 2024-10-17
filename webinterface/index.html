@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket Message Table</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f9;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      table,
+      th,
+      td {
+        border: 1px solid #ddd;
+      }
+      th,
+      td {
+        padding: 10px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+      input {
+        padding: 10px;
+        width: 200px;
+        margin-right: 10px;
+      }
+      button {
+        padding: 10px;
+      }
+      .form-section {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WebSocket Message Table</h1>
+
+    <div class="form-section">
+      <input type="text" id="sender" placeholder="Your Name" />
+      <input type="text" id="messageType" placeholder="Message Type" />
+      <input type="text" id="message" placeholder="Message" />
+      <button id="send-button">Send</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Sender</th>
+          <th>Message Type</th>
+          <th>Content</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody id="message-table-body">
+        <!-- Messages will be appended here -->
+      </tbody>
+    </table>
+
+    <script>
+      let socket;
+
+      window.onload = function () {
+        const sendButton = document.getElementById("send-button");
+        const messageTableBody = document.getElementById("message-table-body");
+
+        // Connect to WebSocket server
+        socket = new WebSocket("ws://54.172.199.96:8080");
+
+        // When connection is established
+        socket.onopen = function () {
+          console.log("Connected to WebSocket server");
+        };
+
+        // When receiving messages from the server (client and server messages)
+        socket.onmessage = function (event) {
+          const data = JSON.parse(event.data);
+
+          // Check if the message is from the server (and ignore server responses)
+          if (data.sender !== "Server") {
+            addRowToTable(data.sender, data.type, data.content, data.timestamp);
+          }
+        };
+
+        // Handle WebSocket errors
+        socket.onerror = function (error) {
+          console.error("WebSocket Error: ", error);
+        };
+
+        // When WebSocket is closed
+        socket.onclose = function () {
+          console.log("WebSocket connection closed");
+        };
+
+        // Send message to WebSocket server
+        sendButton.addEventListener("click", function () {
+          const sender = document.getElementById("sender").value || "Anonymous";
+          const messageType =
+            document.getElementById("messageType").value || "default";
+          const message = document.getElementById("message").value || "";
+
+          if (message) {
+            const data = {
+              sender: sender,
+              type: messageType,
+              content: message,
+            };
+
+            // Send the message to the WebSocket server
+            socket.send(JSON.stringify(data));
+
+            // Clear message field
+            document.getElementById("message").value = "";
+          }
+        });
+
+        // Helper function to add rows to the table
+        function addRowToTable(sender, messageType, content, timestamp) {
+          const row = document.createElement("tr");
+          const senderCell = document.createElement("td");
+          const typeCell = document.createElement("td");
+          const contentCell = document.createElement("td");
+          const timestampCell = document.createElement("td");
+
+          senderCell.textContent = sender;
+          typeCell.textContent = messageType;
+          contentCell.textContent = content;
+          timestampCell.textContent = new Date(timestamp).toLocaleString();
+
+          row.appendChild(senderCell);
+          row.appendChild(typeCell);
+          row.appendChild(contentCell);
+          row.appendChild(timestampCell);
+          messageTableBody.appendChild(row);
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,47 +1,44 @@
 import asyncio
-import websockets
 import json
 import os
 from datetime import datetime
 
-# File to store messages
-MESSAGES_FILE = 'messages.json'
+import websockets
+from dotenv import load_dotenv
 
-# Load messages from JSON file
-def load_messages_from_json():
-    if os.path.exists(MESSAGES_FILE):
-        with open(MESSAGES_FILE, 'r') as file:
-            return json.load(file)
-    return []
+load_dotenv()
 
-# Save message to JSON file
-def save_message_to_json(sender, message_type, content):
-    # Load existing messages
-    messages = load_messages_from_json()
-    
-    # Append new message with current timestamp
-    messages.append({
-        "sender": sender,
-        "type": message_type,
-        "content": content,
-        "timestamp": datetime.now().isoformat()  # Use current time in ISO format
-    })
-    
-    # Write back to the JSON file
-    with open(MESSAGES_FILE, 'w') as file:
-        json.dump(messages, file, indent=4)
+# Constants
+MESSAGES_FILE = "data/websocket_messages.json"
+WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
+WS_PORT = int(os.getenv("WS_PORT", 8080))
 
-# Store connected clients
+
+def load_messages():
+    """Load messages from JSON file."""
+    try:
+        with open(MESSAGES_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def save_message(sender, message_type, timestamp):
+    """Save message to JSON file."""
+    messages = load_messages()
+    messages.append({"sender": sender, "type": message_type, "timestamp": timestamp})
+    with open(MESSAGES_FILE, "w") as f:
+        json.dump(messages, f, indent=4)
+
+
 connected_clients = set()
 
-# WebSocket server handler
-async def handler(websocket, path):
-    print("Client connected")
-    connected_clients.add(websocket)  # Add the client to the connected clients set
 
+async def handle_websocket(websocket, path):
+    """Handle WebSocket connections and messages."""
+    connected_clients.add(websocket)
     try:
-        # Send all previous messages to the new client when they connect
-        old_messages = load_messages_from_json()
+        old_messages = load_messages()
         for msg in old_messages:
             await websocket.send(json.dumps(msg))
 
@@ -49,36 +46,31 @@ async def handler(websocket, path):
             data = json.loads(message)
             sender = data.get("sender", "Unknown")
             message_type = data.get("type", "default")
-            content = data.get("content", "")
+            timestamp = datetime.now().isoformat()
 
-            print(f"Received message from {sender} - Type: {message_type}, Content: {content}")
+            save_message(sender, message_type, timestamp)
 
-            # Save the client's message to the JSON file
-            save_message_to_json(sender, message_type, content)
+            broadcast_message = json.dumps(
+                {"sender": sender, "type": message_type, "timestamp": timestamp}
+            )
 
-            # Broadcast the message to all connected clients (including sender)
-            broadcast_message = json.dumps({
-                "sender": sender,
-                "type": message_type,
-                "content": content,
-                "timestamp": datetime.now().isoformat()  # Add the current timestamp
-            })
-
-            # Broadcast the message to all connected clients
             await asyncio.gather(
                 *[client.send(broadcast_message) for client in connected_clients]
             )
-
-    except websockets.ConnectionClosed as e:
-        print(f"Client disconnected: {e}")
+    except websockets.ConnectionClosed:
+        pass
     finally:
-        connected_clients.remove(websocket)  # Remove the client when disconnected
+        connected_clients.remove(websocket)
 
-# Start the WebSocket server with custom ping_interval and ping_timeout
+
 async def main():
-    async with websockets.serve(handler, "0.0.0.0", 8080, ping_interval=None, ping_timeout=None):
-        print("WebSocket server running on ws://0.0.0.0:8080")
-        await asyncio.Future()  # Keep the server running
+    """Start the WebSocket server."""
+    server = await websockets.serve(
+        handle_websocket, WS_HOST, WS_PORT, ping_interval=None, ping_timeout=None
+    )
+    print(f"WebSocket server running on ws://{WS_HOST}:{WS_PORT}")
+    await server.wait_closed()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -23,10 +23,17 @@ def load_messages():
         return []
 
 
-def save_message(sender, message_type, timestamp):
+def save_message(sender, message_type, timestamp, ticker):
     """Save message to JSON file."""
     messages = load_messages()
-    messages.append({"sender": sender, "type": message_type, "timestamp": timestamp})
+    messages.append(
+        {
+            "sender": sender,
+            "type": message_type,
+            "timestamp": timestamp,
+            "ticker": ticker,
+        }
+    )
     with open(MESSAGES_FILE, "w") as f:
         json.dump(messages, f, indent=4)
 
@@ -46,12 +53,18 @@ async def handle_websocket(websocket, path):
             data = json.loads(message)
             sender = data.get("sender", "Unknown")
             message_type = data.get("type", "default")
+            ticker = data.get("ticker", "")
             timestamp = datetime.now().isoformat()
 
-            save_message(sender, message_type, timestamp)
+            save_message(sender, message_type, timestamp, ticker)
 
             broadcast_message = json.dumps(
-                {"sender": sender, "type": message_type, "timestamp": timestamp}
+                {
+                    "sender": sender,
+                    "type": message_type,
+                    "timestamp": timestamp,
+                    "ticker": ticker,
+                }
             )
 
             await asyncio.gather(

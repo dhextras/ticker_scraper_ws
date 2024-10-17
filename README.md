@@ -74,7 +74,7 @@ pip install -r requirements.txt
 Here is a quick overview of the project structure:
 
 ```plaintext
-your_project/
+ticker_scraper_ws/
 ├── data/                    # Folder for storing data files
 ├── webinterface/            # Web interface files
 │   ├── index.html           # Main web interface

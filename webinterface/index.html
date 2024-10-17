@@ -82,6 +82,8 @@
       </tbody>
     </table>
 
+    <script src="config.js"></script>
+
     <script>
       let socket;
 
@@ -90,7 +92,7 @@
         const messageTableBody = document.getElementById("message-table-body");
 
         // Connect to WebSocket server
-        socket = new WebSocket("ws://localhost:8080");
+        socket = new WebSocket(window.env.WEBSOCKET_URL);
 
         // When connection is established
         socket.onopen = function () {

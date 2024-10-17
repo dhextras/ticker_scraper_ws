@@ -41,7 +41,18 @@ Install the required Python packages using:
 pip install -r requirements.txt
 ```
 
-## Step 3: Running the WebSocket Server
+## Step 3: Create a `webinterface/config.js` File
+
+1. **Create a file named `config.js` webinterface directory.**
+2. **Add the following details:**
+
+   ```javascript
+   window.env = {
+      WEBSOCKET_URL: "ws://<DOMAIN/IP>:8080", // Replace your domain or Ip address
+   }
+   ```
+
+## Step 4: Running the WebSocket Server
 
 1. **Start the WebSocket server:**
 
@@ -55,7 +66,7 @@ pip install -r requirements.txt
 
    The WebSocket server should now be running and ready to handle incoming connections. You can use WebSocket client tools (like browser extensions or other tools) to test the connection.
 
-## Step 4: Hosting the Web Interface
+## Step 5: Hosting the Web Interface
 
 1. **Host the `index.html` file on port 80:**
 

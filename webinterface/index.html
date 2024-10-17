@@ -129,7 +129,7 @@
           if (message) {
             const data = {
               sender: sender,
-              name: "Test"
+              name: "Test",
               type: messageType,
               ticker: message,
             };
@@ -184,6 +184,8 @@
                 return "#90EE90"; // Light Green
               } else if (type.toLowerCase() === "buy") {
                 return "#FFD700"; // Gold
+              } else {
+                return "#FFFFFF"; // White
               }
               break;
             case "stocknews":

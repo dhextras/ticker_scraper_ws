@@ -155,7 +155,14 @@
           senderCell.textContent = name;
           typeCell.textContent = type;
           tickerCell.textContent = ticker || "N/A";
-          timestampCell.textContent = new Date(timestamp).toLocaleString();
+          const tempDate = new Date(timestamp);
+          const formattedDate =
+            `${tempDate.getMonth() + 1}/${tempDate.getDate()}/${tempDate.getFullYear()}, ` +
+            `${tempDate.getHours() % 12 || 12}:${tempDate.getMinutes().toString().padStart(2, "0")}:` +
+            `${tempDate.getSeconds().toString().padStart(2, "0")}.${tempDate.getMilliseconds()} ` +
+            `${tempDate.getHours() >= 12 ? "PM" : "AM"}`;
+
+          timestampCell.textContent = formattedDate;
 
           // Set data-label attributes for mobile responsiveness
           senderCell.setAttribute("data-label", "Sender");

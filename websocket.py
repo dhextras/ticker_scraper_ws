@@ -58,7 +58,7 @@ async def handle_websocket(websocket, path):
             message_type = data.get("type", "default")
             ticker = data.get("ticker", "")
             timestamp = datetime.now(pytz.timezone("US/Eastern")).strftime(
-                "%Y-%m-%d %H:%M:%S"
+                "%Y-%m-%d %H:%M:%S.%f"
             )
 
             save_message(sender, name, message_type, timestamp, ticker)

@@ -47,9 +47,9 @@ async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
     connected_clients.add(websocket)
     try:
-        old_messages = load_messages()
-        for msg in old_messages:
-            await websocket.send(json.dumps(msg))
+        # old_messages = load_messages()
+        # for msg in old_messages:
+        #     await websocket.send(json.dumps(msg))
 
         async for message in websocket:
             data = json.loads(message)

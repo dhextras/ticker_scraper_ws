@@ -32,6 +32,24 @@
       .form-section {
         margin-bottom: 20px;
       }
+      select,
+      input {
+        padding: 8px;
+        margin-right: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      button {
+        padding: 8px 16px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
       @media (max-width: 600px) {
         table,
         tr,
@@ -62,8 +80,26 @@
     <h1>WebSocket Message Table</h1>
 
     <div class="form-section">
-      <input type="text" id="sender" placeholder="Your Name" />
-      <input type="text" id="type" placeholder="Message Type" />
+      <select id="sender">
+        <option value="">Select Name</option>
+        <option value="oxfordclub">Oxford Club</option>
+        <option value="stewie">Stewie</option>
+        <option value="hedgeye">Hedgeye</option>
+        <option value="stocknews">Stock News</option>
+        <option value="kerrisdale">Kerrisdale</option>
+        <option value="hindenburg">Hindenburg</option>
+        <option value="cnbc">CNBC</option>
+        <option value="motley_fool">Motley Fool</option>
+        <option value="bearcave">Bear Cave</option>
+        <option value="muddy_waters">Muddy Waters</option>
+        <option value="grizzly">Grizzly</option>
+        <option value="altucher">Altucher</option>
+      </select>
+      <select id="type">
+        <option value="">Select Type</option>
+        <option value="buy">Buy</option>
+        <option value="sell">Sell</option>
+      </select>
       <input type="text" id="ticker" placeholder="Ticker" />
       <button id="send-button">Send</button>
     </div>
@@ -123,24 +159,24 @@
 
         // Send message to WebSocket server
         sendButton.addEventListener("click", function () {
-          const sender = document.getElementById("sender").value || "Anonymous";
-          const messageType =
-            document.getElementById("type").value || "default";
-          const message = document.getElementById("ticker").value || "";
+          const sender = document.getElementById("sender").value;
+          const messageType = document.getElementById("type").value;
+          const message = document.getElementById("ticker").value;
 
-          if (message) {
+          if (message && sender && messageType) {
             const data = {
-              sender: sender,
-              name: "Test",
+              sender: sender.toLowerCase(),
+              name: sender,
               type: messageType,
               ticker: message,
             };
 
             socket.send(JSON.stringify(data));
 
-            document.getElementById("sender").value = "";
-            document.getElementById("type").value = "";
             document.getElementById("ticker").value = "";
+            document.getElementById("ticker").focus();
+          } else {
+            alert("Enter the value before sending...");
           }
         });
 
@@ -152,10 +188,11 @@
           const tickerCell = document.createElement("td");
           const timestampCell = document.createElement("td");
 
-          senderCell.textContent = name;
+          senderCell.textContent = name || sender; // Use name if available, otherwise use sender
           typeCell.textContent = type;
           tickerCell.textContent = ticker || "N/A";
-          const tempDate = new Date(timestamp);
+
+          const tempDate = timestamp ? new Date(timestamp) : new Date();
           const formattedDate =
             `${tempDate.getMonth() + 1}/${tempDate.getDate()}/${tempDate.getFullYear()}, ` +
             `${tempDate.getHours() % 12 || 12}:${tempDate.getMinutes().toString().padStart(2, "0")}:` +
@@ -171,7 +208,7 @@
           timestampCell.setAttribute("data-label", "Timestamp");
 
           // Apply color coding
-          const color = getColorCode(sender, type, ticker);
+          const color = getColorCode(name || sender, type, ticker);
           row.style.backgroundColor = color;
 
           row.appendChild(senderCell);

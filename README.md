@@ -73,7 +73,7 @@ pip install -r requirements.txt
    To serve the web interface located in the `webinterface/` directory on port 80, you can use a simple HTTP server:
 
    ```bash
-   sudo python -m http.server 80 --directory webinterface/
+   sudo python3 -m http.server 80 --directory webinterface/
    ```
 
 2. **Access the web interface:**

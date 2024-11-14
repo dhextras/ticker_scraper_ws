@@ -46,11 +46,18 @@ connected_clients = set()
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
     connected_clients.add(websocket)
-    try:
-        # old_messages = load_messages()
-        # for msg in old_messages:
-        #     await websocket.send(json.dumps(msg))
 
+    # Check if the client wants old messages
+    async for message in websocket:
+        data = json.loads(message)
+        if data.get("request_old_messages", False):
+            old_messages = load_messages()
+            for msg in old_messages:
+                await websocket.send(json.dumps(msg))
+        else:
+            break
+
+    try:
         async for message in websocket:
             data = json.loads(message)
             sender = data.get("sender", "Unknown")

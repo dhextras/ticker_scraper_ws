@@ -132,6 +132,8 @@
 
         // When connection is established
         socket.onopen = function () {
+          // Get the inital data back
+          socket.send(JSON.stringify({ request_old_messages: true }));
           console.log("Connected to WebSocket server");
         };
 

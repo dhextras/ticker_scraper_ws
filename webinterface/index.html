@@ -82,25 +82,24 @@
     <div class="form-section">
       <select id="sender">
         <option value="">Select Name</option>
-        <option value="oxfordclub">Oxford Club</option>
-        <option value="stewie">Stewie</option>
-        <option value="hedgeye">Hedgeye</option>
-        <option value="stocknews">Stock News</option>
-        <option value="kerrisdale">Kerrisdale</option>
-        <option value="hindenburg">Hindenburg</option>
-        <option value="cnbc">CNBC</option>
-        <option value="motley_fool">Motley Fool</option>
-        <option value="bearcave">Bear Cave</option>
-        <option value="muddy_waters">Muddy Waters</option>
-        <option value="grizzly">Grizzly</option>
-        <option value="altucher">Altucher</option>
+        <option value="Oxford Club">Oxford Club</option>
+        <option value="Stewie">Stewie</option>
+        <option value="Hedgeye">Hedgeye</option>
+        <option value="Stock News">Stock News</option>
+        <option value="Kerrisdale">Kerrisdale</option>
+        <option value="Hindenburg">Hindenburg</option>
+        <option value="CNBC">CNBC</option>
+        <option value="Motley Fool">Motley Fool</option>
+        <option value="Bear Cave">Bear Cave</option>
+        <option value="Muddy Waters">Muddy Waters</option>
+        <option value="Grizzly">Grizzly</option>
+        <option value="Altucher">Altucher</option>
       </select>
       <select id="type">
         <option value="">Select Type</option>
         <option value="Buy">Buy</option>
         <option value="Sell">Sell</option>
       </select>
-      <input type="text" id="ticker" placeholder="Ticker" />
       <button id="send-button">Send</button>
     </div>
 
@@ -163,14 +162,13 @@
         sendButton.addEventListener("click", function () {
           const sender = document.getElementById("sender").value;
           const messageType = document.getElementById("type").value;
-          const message = document.getElementById("ticker").value;
 
           if (message && sender && messageType) {
             const data = {
               sender: sender.toLowerCase(),
               name: sender,
               type: messageType,
-              ticker: message,
+              ticker: "TEST_IGNORE",
             };
 
             socket.send(JSON.stringify(data));

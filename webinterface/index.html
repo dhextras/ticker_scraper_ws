@@ -82,18 +82,18 @@
     <div class="form-section">
       <select id="sender">
         <option value="">Select Name</option>
-        <option value="Oxford Club">Oxford Club</option>
-        <option value="Stewie">Stewie</option>
-        <option value="Hedgeye">Hedgeye</option>
-        <option value="Stock News">Stock News</option>
-        <option value="Kerrisdale">Kerrisdale</option>
-        <option value="Hindenburg">Hindenburg</option>
-        <option value="CNBC">CNBC</option>
-        <option value="Motley Fool">Motley Fool</option>
-        <option value="Bear Cave">Bear Cave</option>
-        <option value="Muddy Waters">Muddy Waters</option>
-        <option value="Grizzly">Grizzly</option>
-        <option value="Altucher">Altucher</option>
+        <option value="oxfordclub">Oxford Club</option>
+        <option value="stewie">Stewie</option>
+        <option value="hedgeye">Hedgeye</option>
+        <option value="stocknews">Stock News</option>
+        <option value="kerrisdale">Kerrisdale</option>
+        <option value="hindenburg">Hindenburg</option>
+        <option value="cnbc">CNBC</option>
+        <option value="motley_fool">Motley Fool</option>
+        <option value="bearcave">Bear Cave</option>
+        <option value="muddy_waters">Muddy Waters</option>
+        <option value="grizzly">Grizzly</option>
+        <option value="altucher">Altucher</option>
       </select>
       <select id="type">
         <option value="">Select Type</option>
@@ -160,23 +160,23 @@
 
         // Send message to WebSocket server
         sendButton.addEventListener("click", function () {
-          const sender = document.getElementById("sender").value;
-          const messageType = document.getElementById("type").value;
+          const sender = document.getElementById("sender");
+          const messageType = document.getElementById("type");
 
-          if (message && sender && messageType) {
+          if (sender.value && messageType.value) {
             const data = {
-              sender: sender.toLowerCase(),
-              name: sender,
-              type: messageType,
+              name: sender.options[sender.selectedIndex].text,
+              sender: sender.value,
+              type: messageType.value,
               ticker: "TEST_IGNORE",
             };
 
             socket.send(JSON.stringify(data));
 
-            document.getElementById("ticker").value = "";
-            document.getElementById("ticker").focus();
+            sender.selectedIndex = 0;
+            messageType.selectedIndex = 0;
           } else {
-            alert("Enter the value before sending...");
+            alert("Choose a Name and a type before sending tests.....");
           }
         });
 
@@ -208,7 +208,7 @@
           timestampCell.setAttribute("data-label", "Timestamp");
 
           // Apply color coding
-          const color = getColorCode(name || sender, type, ticker);
+          const color = getColorCode(sender || name, type, ticker);
           row.style.backgroundColor = color;
 
           row.appendChild(senderCell);

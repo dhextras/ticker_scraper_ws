@@ -47,42 +47,40 @@ async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
     connected_clients.add(websocket)
 
-    # Check if the client wants old messages
-    async for message in websocket:
-        data = json.loads(message)
-        if data.get("request_old_messages", False):
-            old_messages = load_messages()
-            for msg in old_messages:
-                await websocket.send(json.dumps(msg))
-        else:
-            break
-
     try:
         async for message in websocket:
             data = json.loads(message)
-            sender = data.get("sender", "Unknown")
-            name = data.get("name", "Unknown")
-            message_type = data.get("type", "default")
-            ticker = data.get("ticker", "")
-            timestamp = datetime.now(pytz.timezone("US/Eastern")).strftime(
-                "%Y-%m-%d %H:%M:%S.%f"
-            )
 
-            save_message(sender, name, message_type, timestamp, ticker)
+            # Check if the client wants old messages
+            if data.get("request_old_messages", False):
+                old_messages = load_messages()
+                for msg in old_messages:
+                    await websocket.send(json.dumps(msg))
+            else:
 
-            broadcast_message = json.dumps(
-                {
-                    "sender": sender,
-                    "name": name,
-                    "type": message_type,
-                    "timestamp": timestamp,
-                    "ticker": ticker,
-                }
-            )
+                sender = data.get("sender", "Unknown")
+                name = data.get("name", "Unknown")
+                message_type = data.get("type", "default")
+                ticker = data.get("ticker", "")
+                timestamp = datetime.now(pytz.timezone("US/Eastern")).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )
 
-            await asyncio.gather(
-                *[client.send(broadcast_message) for client in connected_clients]
-            )
+                save_message(sender, name, message_type, timestamp, ticker)
+
+                broadcast_message = json.dumps(
+                    {
+                        "sender": sender,
+                        "name": name,
+                        "type": message_type,
+                        "timestamp": timestamp,
+                        "ticker": ticker,
+                    }
+                )
+
+                await asyncio.gather(
+                    *[client.send(broadcast_message) for client in connected_clients]
+                )
     except websockets.ConnectionClosed:
         pass
     finally:

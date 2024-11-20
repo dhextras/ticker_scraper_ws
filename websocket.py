@@ -55,6 +55,7 @@ async def handle_websocket(websocket, path):
             if data.get("request_old_messages", False):
                 old_messages = load_messages()
                 for msg in old_messages:
+                    msg["old_message"] = True
                     await websocket.send(json.dumps(msg))
             else:
 
@@ -75,6 +76,7 @@ async def handle_websocket(websocket, path):
                         "type": message_type,
                         "timestamp": timestamp,
                         "ticker": ticker,
+                        "old_message": False,
                     }
                 )
 

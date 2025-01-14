@@ -81,20 +81,7 @@
 
     <div class="form-section">
       <select id="sender">
-        <option value="">Select Name</option>
-        <option value="oxfordclub">Oxford Club</option>
-        <option value="stewie">Stewie</option>
-        <option value="hedgeye">Hedgeye</option>
-        <option value="stocknews">Stock News</option>
-        <option value="kerrisdale">Kerrisdale</option>
-        <option value="hindenburg">Hindenburg</option>
-        <option value="cnbc">CNBC</option>
-        <option value="motley_fool">Motley Fool</option>
-        <option value="bearcave">Bear Cave</option>
-        <option value="muddy_waters">Muddy Waters</option>
-        <option value="grizzly">Grizzly</option>
-        <option value="altucher">Altucher</option>
-        <option value="navallier">Navallier</option>
+        <!-- Options will be appended here -->
       </select>
       <select id="type">
         <option value="">Select Type</option>
@@ -128,8 +115,23 @@
       window.onload = function () {
         const sendButton = document.getElementById("send-button");
         const messageTableBody = document.getElementById("message-table-body");
+        const senderDropdown = document.getElementById("sender");
+        const typeDropdown = document.getElementById("type");
+
+        // Populate sender dropdown dynamically
+        Object.entries(config.senders).forEach(([key, { name }]) => {
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = name;
+          senderDropdown.appendChild(option);
+        });
+
+        let socket;
+        let pushEnabled = false;
+        let notificationPermission = false;
 
         requestNotificationPermission();
+
         // Request notification permission
         async function requestNotificationPermission() {
           if (!("Notification" in window)) {
@@ -139,13 +141,7 @@
 
           try {
             const permission = await Notification.requestPermission();
-            if (permission === "granted") {
-              pushEnabled = true;
-              notificationPermission = true;
-            } else {
-              pushEnabled = false;
-              alert("Notification permission denied");
-            }
+            pushEnabled = permission === "granted";
           } catch (error) {
             console.error("Error requesting notification permission:", error);
           }
@@ -154,103 +150,68 @@
         // Connect to WebSocket server
         socket = new WebSocket(window.env.WEBSOCKET_URL);
 
-        // When connection is established
         socket.onopen = function () {
-          socket.send(JSON.stringify({ request_old_messages: true }));
           console.log("Connected to WebSocket server");
+          socket.send(JSON.stringify({ request_old_messages: true }));
 
-          if (pushEnabled && notificationPermission) {
+          if (pushEnabled) {
             new Notification("WebSocket Connected", {
               body: "You are now connected to the WebSocket server",
             });
           }
         };
 
-        // When receiving messages from the server
         socket.onmessage = function (event) {
           const data = JSON.parse(event.data);
+          addRowToTable(data.sender, data.type, data.ticker, data.timestamp);
 
-          const isNewMessage = !data.old_message && data.old_message === false;
-
-          addRowToTable(
-            data.name,
-            data.sender,
-            data.type,
-            data.ticker,
-            data.timestamp,
-          );
-
-          if (isNewMessage) {
-            if (pushEnabled && notificationPermission) {
-              new Notification(data.name, {
-                body: `${data.type} ${data.ticker || "N/A"}`,
-              });
-            }
+          if (!data.old_message && pushEnabled) {
+            new Notification(config.senders[data.sender]?.name || data.sender, {
+              body: `${data.type} ${data.ticker || "N/A"}`,
+            });
           }
         };
 
-        // Handle WebSocket errors
         socket.onerror = function (error) {
           console.error("WebSocket Error: ", error);
         };
 
-        // When WebSocket is closed
         socket.onclose = function () {
           console.log("WebSocket connection closed");
         };
 
-        // Send message to WebSocket server
         sendButton.addEventListener("click", function () {
-          const sender = document.getElementById("sender");
-          const messageType = document.getElementById("type");
+          const sender = senderDropdown.value;
+          const messageType = typeDropdown.value;
 
-          if (sender.value && messageType.value) {
+          if (sender && messageType) {
             const data = {
-              name: sender.options[sender.selectedIndex].text,
-              sender: sender.value,
-              type: messageType.value,
+              sender,
+              type: messageType,
               ticker: "TEST_IGNORE",
             };
-
             socket.send(JSON.stringify(data));
-
-            sender.selectedIndex = 0;
-            messageType.selectedIndex = 0;
+            senderDropdown.selectedIndex = 0;
+            typeDropdown.selectedIndex = 0;
           } else {
-            alert("Choose a Name and a type before sending tests.....");
+            alert("Choose a Name and a Type before sending.");
           }
         });
 
-        // Helper function to add rows to the table
-        function addRowToTable(name, sender, type, ticker, timestamp) {
+        function addRowToTable(sender, type, ticker, timestamp) {
           const row = document.createElement("tr");
           const senderCell = document.createElement("td");
           const typeCell = document.createElement("td");
           const tickerCell = document.createElement("td");
           const timestampCell = document.createElement("td");
 
-          senderCell.textContent = name || sender; // Use name if available, otherwise use sender
+          senderCell.textContent = config.senders[sender]?.name || sender;
           typeCell.textContent = type;
           tickerCell.textContent = ticker || "N/A";
+          timestampCell.textContent = formatDate(timestamp);
 
-          const tempDate = timestamp ? new Date(timestamp) : new Date();
-          const formattedDate =
-            `${tempDate.getMonth() + 1}/${tempDate.getDate()}/${tempDate.getFullYear()}, ` +
-            `${tempDate.getHours() % 12 || 12}:${tempDate.getMinutes().toString().padStart(2, "0")}:` +
-            `${tempDate.getSeconds().toString().padStart(2, "0")}.${tempDate.getMilliseconds()} ` +
-            `${tempDate.getHours() >= 12 ? "PM" : "AM"}`;
-
-          timestampCell.textContent = formattedDate;
-
-          // Set data-label attributes for mobile responsiveness
-          senderCell.setAttribute("data-label", "Sender");
-          typeCell.setAttribute("data-label", "Type");
-          tickerCell.setAttribute("data-label", "Ticker");
-          timestampCell.setAttribute("data-label", "Timestamp");
-
-          // Apply color coding
-          const color = getColorCode(sender || name, type, ticker);
-          row.style.backgroundColor = color;
+          row.style.backgroundColor =
+            config.senders[sender]?.color || "#FFFFFF";
 
           row.appendChild(senderCell);
           row.appendChild(typeCell);
@@ -259,60 +220,19 @@
           messageTableBody.insertBefore(row, messageTableBody.firstChild);
         }
 
-        // Function to determine color based on sender and type
-        function getColorCode(sender, type, ticker) {
-          switch (sender.toLowerCase()) {
-            case "oxfordclub":
-              return "#ADD8E6"; // Light Blue
-            case "stewie":
-              return "#FFCCCB"; // Light Red
-            case "hedgeye":
-              if (type.toLowerCase() === "sell") {
-                return "#90EE90"; // Light Green
-              } else if (type.toLowerCase() === "buy") {
-                return "#FFD700"; // Gold
-              } else {
-                return "#FFFFFF"; // White
-              }
-            case "stocknews":
-              return "#FFFFE0"; // Light Yellow
-            case "kerrisdale":
-            case "hindenburg":
-              return "#585858"; // Dark Gray
-            case "cnbc":
-              return "#2d17fc"; // Navy
-            case "motley_fool":
-              return "#FFC0CB"; // Pink
-            case "bearcave":
-              return "#C0C0C0"; // Silver
-            case "muddy_waters":
-              return "#FFDAB9"; // Peach
-            case "grizzly":
-              return "#98FB98"; // Pale Green
-            case "altucher":
-              return "#E6E6FA"; // Lavender
-            case "navallier":
-              return "#a09f57"; // Dark Yellow
-            case "zacks":
-              return "#00FFFF"; // Aqua
-            case "ibd_leaderboard":
-              return "#FFA07A"; // Light Salmon
-            case "swingtrader":
-              return "#FF7F50"; // Coral
-            case "bananatwitter":
-              return "#FFE900"; // Bright Yellow
-            default:
-              return "#FFFFFF"; // White
-
-            // Extra colors for future
-            // Medium Spring Green: #00FA9A
-            // Thistle: #D8BFD8
-            // Pale Goldenrod: #EEE8AA
-            // Sky Blue: #87CEEB
-            // Burly Wood: #DEB887
-            // Mint Cream: #F5FFFA
-            // Powder Blue: #B0E0E6
-          }
+        function formatDate(timestamp) {
+          const tempDate = timestamp ? new Date(timestamp) : new Date();
+          return (
+            `${tempDate.getMonth() + 1}/${tempDate.getDate()}/${tempDate.getFullYear()}, ` +
+            `${tempDate.getHours() % 12 || 12}:${tempDate
+              .getMinutes()
+              .toString()
+              .padStart(2, "0")}:${tempDate
+              .getSeconds()
+              .toString()
+              .padStart(2, "0")}.${tempDate.getMilliseconds()} ` +
+            `${tempDate.getHours() >= 12 ? "PM" : "AM"}`
+          );
         }
       };
     </script>

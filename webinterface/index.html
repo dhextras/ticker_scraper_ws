@@ -11,10 +11,27 @@
         padding: 20px;
         background-color: #f4f4f9;
       }
+      .controls-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .search-section,
+      .date-filter-section {
+        flex: 1;
+        min-width: 250px;
+      }
       table {
         width: 100%;
         border-collapse: collapse;
         margin: 20px 0;
+        background-color: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
       table,
       th,
@@ -23,14 +40,15 @@
       }
       th,
       td {
-        padding: 10px;
+        padding: 12px;
         text-align: left;
       }
       th {
         background-color: #f2f2f2;
+        cursor: pointer;
       }
-      .form-section {
-        margin-bottom: 20px;
+      th:hover {
+        background-color: #e6e6e6;
       }
       select,
       input {
@@ -38,6 +56,7 @@
         margin-right: 10px;
         border: 1px solid #ddd;
         border-radius: 4px;
+        width: 200px;
       }
       button {
         padding: 8px 16px;
@@ -50,7 +69,31 @@
       button:hover {
         background-color: #45a049;
       }
+      .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .pagination button {
+        background-color: white;
+        color: #4caf50;
+        border: 1px solid #4caf50;
+      }
+      .pagination button.active {
+        background-color: #4caf50;
+        color: white;
+      }
+      .pagination button:disabled {
+        background-color: #cccccc;
+        border-color: #cccccc;
+        cursor: not-allowed;
+      }
       @media (max-width: 600px) {
+        .controls-container {
+          flex-direction: column;
+        }
         table,
         tr,
         td {
@@ -79,25 +122,39 @@
   <body>
     <h1>WebSocket Message Table</h1>
 
-    <div class="form-section">
-      <select id="sender">
-        <!-- Options will be appended here -->
-      </select>
-      <select id="type">
-        <option value="">Select Type</option>
-        <option value="Buy">Buy</option>
-        <option value="Sell">Sell</option>
-      </select>
-      <button id="send-button">Send</button>
+    <div class="controls-container">
+      <div class="search-section">
+        <input type="text" id="search" placeholder="Search tickers..." />
+        <select id="sender-filter">
+          <option value="">Filter by Sender</option>
+        </select>
+      </div>
+
+      <div class="date-filter-section">
+        <input type="date" id="start-date" />
+        <input type="date" id="end-date" />
+      </div>
+
+      <div class="form-section">
+        <select id="sender">
+          <!-- Options will be appended here -->
+        </select>
+        <select id="type">
+          <option value="">Select Type</option>
+          <option value="Buy">Buy</option>
+          <option value="Sell">Sell</option>
+        </select>
+        <button id="send-button">Send</button>
+      </div>
     </div>
 
     <table>
       <thead>
         <tr>
-          <th>Sender</th>
-          <th>Type</th>
-          <th>Ticker</th>
-          <th>Timestamp</th>
+          <th data-sort="sender">Sender ↕</th>
+          <th data-sort="type">Type ↕</th>
+          <th data-sort="ticker">Ticker ↕</th>
+          <th data-sort="timestamp">Timestamp ↕</th>
         </tr>
       </thead>
       <tbody id="message-table-body">
@@ -105,79 +162,81 @@
       </tbody>
     </table>
 
+    <div class="pagination" id="pagination">
+      <!-- Pagination buttons will be added here -->
+    </div>
+
     <script src="config.js"></script>
 
     <script>
       let socket;
       let pushEnabled = false;
       let notificationPermission = false;
+      let allMessages = [];
+      let currentPage = 1;
+      const messagesPerPage = 15;
+      let currentSort = { field: "timestamp", ascending: false };
 
       window.onload = function () {
         const sendButton = document.getElementById("send-button");
         const messageTableBody = document.getElementById("message-table-body");
         const senderDropdown = document.getElementById("sender");
+        const senderFilter = document.getElementById("sender-filter");
+        const searchInput = document.getElementById("search");
+        const startDate = document.getElementById("start-date");
+        const endDate = document.getElementById("end-date");
         const typeDropdown = document.getElementById("type");
 
-        // Populate sender dropdown dynamically
+        // Populate sender dropdowns
         Object.entries(config.senders).forEach(([key, { name }]) => {
-          const option = document.createElement("option");
-          option.value = key;
-          option.textContent = name;
-          senderDropdown.appendChild(option);
+          [senderDropdown, senderFilter].forEach((dropdown) => {
+            const option = document.createElement("option");
+            option.value = key;
+            option.textContent = name;
+            dropdown.appendChild(option);
+          });
         });
 
-        let socket;
-        let pushEnabled = false;
-        let notificationPermission = false;
+        // Setup event listeners
+        searchInput.addEventListener("input", refreshTable);
+        senderFilter.addEventListener("change", refreshTable);
+        startDate.addEventListener("change", refreshTable);
+        endDate.addEventListener("change", refreshTable);
+
+        // Setup sorting
+        document.querySelectorAll("th[data-sort]").forEach((th) => {
+          th.addEventListener("click", () => {
+            const field = th.dataset.sort;
+            if (currentSort.field === field) {
+              currentSort.ascending = !currentSort.ascending;
+            } else {
+              currentSort.field = field;
+              currentSort.ascending = true;
+            }
+            refreshTable();
+          });
+        });
 
         requestNotificationPermission();
 
-        // Request notification permission
-        async function requestNotificationPermission() {
-          if (!("Notification" in window)) {
-            alert("This browser does not support desktop notifications");
-            return;
-          }
-
-          try {
-            const permission = await Notification.requestPermission();
-            pushEnabled = permission === "granted";
-          } catch (error) {
-            console.error("Error requesting notification permission:", error);
-          }
-        }
-
-        // Connect to WebSocket server
+        // Connect to WebSocket
         socket = new WebSocket(window.env.WEBSOCKET_URL);
 
         socket.onopen = function () {
           console.log("Connected to WebSocket server");
           socket.send(JSON.stringify({ request_old_messages: true }));
-
-          if (pushEnabled) {
-            new Notification("WebSocket Connected", {
-              body: "You are now connected to the WebSocket server",
-            });
-          }
         };
 
         socket.onmessage = function (event) {
           const data = JSON.parse(event.data);
-          addRowToTable(data.sender, data.type, data.ticker, data.timestamp);
-
-          if (!data.old_message && pushEnabled) {
-            new Notification(config.senders[data.sender]?.name || data.sender, {
-              body: `${data.type} ${data.ticker || "N/A"}`,
-            });
+          if (Array.isArray(data)) {
+            // Handle initial messages load
+            allMessages = data;
+          } else {
+            // Handle new message
+            allMessages.unshift(data);
           }
-        };
-
-        socket.onerror = function (error) {
-          console.error("WebSocket Error: ", error);
-        };
-
-        socket.onclose = function () {
-          console.log("WebSocket connection closed");
+          refreshTable();
         };
 
         sendButton.addEventListener("click", function () {
@@ -198,6 +257,138 @@
           }
         });
 
+        function refreshTable() {
+          // Apply filters
+          let filteredMessages = allMessages.filter((message) => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const senderFilterValue = senderFilter.value;
+            const startDateValue = startDate.value
+              ? new Date(startDate.value)
+              : null;
+            const endDateValue = endDate.value ? new Date(endDate.value) : null;
+
+            return (
+              (!searchTerm ||
+                message.ticker.toLowerCase().includes(searchTerm)) &&
+              (!senderFilterValue || message.sender === senderFilterValue) &&
+              (!startDateValue ||
+                new Date(message.timestamp) >= startDateValue) &&
+              (!endDateValue || new Date(message.timestamp) <= endDateValue)
+            );
+          });
+
+          // Sort messages
+          filteredMessages.sort((a, b) => {
+            let aValue = a[currentSort.field];
+            let bValue = b[currentSort.field];
+
+            if (currentSort.field === "timestamp") {
+              aValue = new Date(aValue);
+              bValue = new Date(bValue);
+            }
+
+            const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+            return currentSort.ascending ? comparison : -comparison;
+          });
+
+          // Update pagination
+          const totalPages = Math.ceil(
+            filteredMessages.length / messagesPerPage,
+          );
+          currentPage = Math.min(currentPage, totalPages);
+          updatePagination(totalPages);
+
+          // Display current page
+          const start = (currentPage - 1) * messagesPerPage;
+          const end = start + messagesPerPage;
+          const pageMessages = filteredMessages.slice(start, end);
+
+          // Clear and repopulate table
+          messageTableBody.innerHTML = "";
+          pageMessages.forEach((message) => {
+            addRowToTable(
+              message.sender,
+              message.type,
+              message.ticker,
+              message.timestamp,
+            );
+          });
+
+          // Update sort indicators
+          document.querySelectorAll("th[data-sort]").forEach((th) => {
+            const field = th.dataset.sort;
+            th.textContent = th.textContent.replace(" ↑", "").replace(" ↓", "");
+            if (field === currentSort.field) {
+              th.textContent += currentSort.ascending ? " ↑" : " ↓";
+            }
+          });
+        }
+
+        function updatePagination(totalPages) {
+          const pagination = document.getElementById("pagination");
+          pagination.innerHTML = "";
+
+          if (totalPages <= 1) return;
+
+          // Previous button
+          addPaginationButton("«", currentPage > 1, () => {
+            currentPage--;
+            refreshTable();
+          });
+
+          // Calculate visible page numbers
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, startPage + 4);
+          startPage = Math.max(1, endPage - 4);
+
+          if (startPage > 1) {
+            addPaginationButton("1", true, () => {
+              currentPage = 1;
+              refreshTable();
+            });
+            if (startPage > 2) {
+              pagination.appendChild(document.createTextNode("..."));
+            }
+          }
+
+          for (let i = startPage; i <= endPage; i++) {
+            addPaginationButton(
+              i.toString(),
+              true,
+              () => {
+                currentPage = i;
+                refreshTable();
+              },
+              i === currentPage,
+            );
+          }
+
+          if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+              pagination.appendChild(document.createTextNode("..."));
+            }
+            addPaginationButton(totalPages.toString(), true, () => {
+              currentPage = totalPages;
+              refreshTable();
+            });
+          }
+
+          // Next button
+          addPaginationButton("»", currentPage < totalPages, () => {
+            currentPage++;
+            refreshTable();
+          });
+        }
+
+        function addPaginationButton(text, enabled, onClick, isActive = false) {
+          const button = document.createElement("button");
+          button.textContent = text;
+          button.disabled = !enabled;
+          if (isActive) button.classList.add("active");
+          button.addEventListener("click", onClick);
+          document.getElementById("pagination").appendChild(button);
+        }
+
         function addRowToTable(sender, type, ticker, timestamp) {
           const row = document.createElement("tr");
           const senderCell = document.createElement("td");
@@ -217,7 +408,21 @@
           row.appendChild(typeCell);
           row.appendChild(tickerCell);
           row.appendChild(timestampCell);
-          messageTableBody.insertBefore(row, messageTableBody.firstChild);
+          messageTableBody.appendChild(row);
+        }
+
+        async function requestNotificationPermission() {
+          if (!("Notification" in window)) {
+            alert("This browser does not support desktop notifications");
+            return;
+          }
+
+          try {
+            const permission = await Notification.requestPermission();
+            pushEnabled = permission === "granted";
+          } catch (error) {
+            console.error("Error requesting notification permission:", error);
+          }
         }
 
         function formatDate(timestamp) {

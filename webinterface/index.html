@@ -171,7 +171,6 @@
     <script>
       let socket;
       let pushEnabled = false;
-      let notificationPermission = false;
       let allMessages = [];
       let currentPage = 1;
       const messagesPerPage = 15;
@@ -224,6 +223,12 @@
 
         socket.onopen = function () {
           console.log("Connected to WebSocket server");
+          if (pushEnabled) {
+            new Notification("WebSocket Connected", {
+              body: "You are now connected to the WebSocket server",
+            });
+          }
+
           socket.send(JSON.stringify({ request_old_messages: true }));
         };
 
@@ -296,6 +301,7 @@
             filteredMessages.length / messagesPerPage,
           );
           currentPage = Math.min(currentPage, totalPages);
+          currentPage = currentPage === 0 && totalPages > 0 ? 1 : currentPage;
           updatePagination(totalPages);
 
           // Display current page
@@ -306,12 +312,24 @@
           // Clear and repopulate table
           messageTableBody.innerHTML = "";
           pageMessages.forEach((message) => {
+            const isNewMessage =
+              !message.old_message && message.old_message === false;
+
             addRowToTable(
+              message.name,
               message.sender,
               message.type,
               message.ticker,
               message.timestamp,
             );
+
+            if (isNewMessage) {
+              if (pushEnabled) {
+                new Notification(message.name, {
+                  body: `${message.type} ${message.ticker || "N/A"}`,
+                });
+              }
+            }
           });
 
           // Update sort indicators
@@ -389,14 +407,15 @@
           document.getElementById("pagination").appendChild(button);
         }
 
-        function addRowToTable(sender, type, ticker, timestamp) {
+        function addRowToTable(name, sender, type, ticker, timestamp) {
           const row = document.createElement("tr");
           const senderCell = document.createElement("td");
           const typeCell = document.createElement("td");
           const tickerCell = document.createElement("td");
           const timestampCell = document.createElement("td");
 
-          senderCell.textContent = config.senders[sender]?.name || sender;
+          senderCell.textContent =
+            name || config.senders[sender]?.name || sender;
           typeCell.textContent = type;
           tickerCell.textContent = ticker || "N/A";
           timestampCell.textContent = formatDate(timestamp);
@@ -420,6 +439,7 @@
           try {
             const permission = await Notification.requestPermission();
             pushEnabled = permission === "granted";
+            if (!permission) alert("Notification permission denied");
           } catch (error) {
             console.error("Error requesting notification permission:", error);
           }

@@ -128,6 +128,19 @@
         <select id="sender-filter">
           <option value="">Filter by Sender</option>
         </select>
+        <select id="page-size">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="40">40</option>
+          <option value="80">80</option>
+          <option value="100">100</option>
+          <option value="150">150</option>
+          <option value="200">200</option>
+          <option value="300">300</option>
+          <option value="400">400</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
       </div>
 
       <div class="date-filter-section">
@@ -173,18 +186,19 @@
       let pushEnabled = false;
       let allMessages = [];
       let currentPage = 1;
-      const messagesPerPage = 15;
+      let messagesPerPage = 10;
       let currentSort = { field: "timestamp", ascending: false };
 
       window.onload = function () {
-        const sendButton = document.getElementById("send-button");
-        const messageTableBody = document.getElementById("message-table-body");
-        const senderDropdown = document.getElementById("sender");
-        const senderFilter = document.getElementById("sender-filter");
-        const searchInput = document.getElementById("search");
-        const startDate = document.getElementById("start-date");
         const endDate = document.getElementById("end-date");
         const typeDropdown = document.getElementById("type");
+        const pageSize = document.getElementById("page-size");
+        const searchInput = document.getElementById("search");
+        const startDate = document.getElementById("start-date");
+        const senderDropdown = document.getElementById("sender");
+        const sendButton = document.getElementById("send-button");
+        const senderFilter = document.getElementById("sender-filter");
+        const messageTableBody = document.getElementById("message-table-body");
 
         // Populate sender dropdowns
         Object.entries(config.senders).forEach(([key, { name }]) => {
@@ -197,10 +211,11 @@
         });
 
         // Setup event listeners
+        endDate.addEventListener("change", refreshTable);
+        pageSize.addEventListener("change", refreshTable);
+        startDate.addEventListener("change", refreshTable);
         searchInput.addEventListener("input", refreshTable);
         senderFilter.addEventListener("change", refreshTable);
-        startDate.addEventListener("change", refreshTable);
-        endDate.addEventListener("change", refreshTable);
 
         // Setup sorting
         document.querySelectorAll("th[data-sort]").forEach((th) => {
@@ -263,6 +278,9 @@
         });
 
         function refreshTable() {
+          // Update page size
+          messagesPerPage = pageSize.value;
+
           // Apply filters
           let filteredMessages = allMessages.filter((message) => {
             const searchTerm = searchInput.value.toLowerCase();

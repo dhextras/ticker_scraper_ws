@@ -129,10 +129,10 @@
           <option value="">Filter by Sender</option>
         </select>
         <select id="page-size">
-          <option value="10">10</option>
+          <option value="10" selected>10</option>
           <option value="20">20</option>
           <option value="30">30</option>
-          <option value="40" selected>40</option>
+          <option value="40">40</option>
           <option value="50">50</option>
           <option value="75">75</option>
           <option value="100">100</option>
@@ -188,7 +188,7 @@
       let pushEnabled = false;
       let allMessages = [];
       let currentPage = 1;
-      let messagesPerPage = 40;
+      let messagesPerPage = 10;
       let currentSort = { field: "timestamp", ascending: false };
 
       window.onload = function () {
@@ -326,7 +326,7 @@
 
           // Display current page
           const start = (currentPage - 1) * messagesPerPage;
-          const end = start + messagesPerPage;
+          const end = start + parseInt(messagesPerPage);
           const pageMessages = filteredMessages.slice(start, end);
 
           // Clear and repopulate table

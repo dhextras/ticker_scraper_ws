@@ -49,7 +49,16 @@ pip install -r requirements.txt
    ```javascript
    window.env = {
       WEBSOCKET_URL: "ws://<DOMAIN/IP>:8080", // Replace your domain or Ip address
-   }
+   };
+
+   const config = {
+      senders: {
+         // Add all the senders here
+      },
+      targets: {
+         // Add the websocket targets here
+      }
+   };
    ```
 
 ## Step 4: Running the WebSocket Server

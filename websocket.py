@@ -55,10 +55,10 @@ async def handle_websocket(websocket, path):
             if data.get("request_old_messages", False):
                 old_messages = load_messages()
                 for msg in old_messages:
-                    msg["old_message"] = True
-                    await websocket.send(json.dumps(msg))
+                    msg["old_message"] = True  # To avoid shit load of notifications
+                # Send all messages as a single array
+                await websocket.send(json.dumps(old_messages))
             else:
-
                 sender = data.get("sender", "Unknown")
                 name = data.get("name", "Unknown")
                 message_type = data.get("type", "default")
@@ -68,7 +68,6 @@ async def handle_websocket(websocket, path):
                 )
 
                 save_message(sender, name, message_type, timestamp, ticker)
-
                 broadcast_message = json.dumps(
                     {
                         "sender": sender,

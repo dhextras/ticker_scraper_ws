@@ -24,18 +24,20 @@ def load_messages():
         return []
 
 
-def save_message(sender, name, message_type, timestamp, ticker):
+def save_message(sender, name, message_type, timestamp, ticker, target=None):
     """Save message to JSON file."""
     messages = load_messages()
-    messages.append(
-        {
-            "sender": sender,
-            "name": name,
-            "type": message_type,
-            "timestamp": timestamp,
-            "ticker": ticker,
-        }
-    )
+    message = {
+        "sender": sender,
+        "name": name,
+        "type": message_type,
+        "timestamp": timestamp,
+        "ticker": ticker,
+    }
+    if target:
+        message["target"] = target
+
+    messages.append(message)
     with open(MESSAGES_FILE, "w") as f:
         json.dump(messages, f, indent=4)
 
@@ -46,42 +48,43 @@ connected_clients = set()
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
     connected_clients.add(websocket)
-
     try:
         async for message in websocket:
             data = json.loads(message)
-
             # Check if the client wants old messages
             if data.get("request_old_messages", False):
                 old_messages = load_messages()
                 for msg in old_messages:
-                    msg["old_message"] = True  # To avoid shit load of notifications
-                # Send all messages as a single array
+                    msg["old_message"] = True
                 await websocket.send(json.dumps(old_messages))
             else:
-                sender = data.get("sender", "Unknown")
-                name = data.get("name", "Unknown")
+                sender = data.get("sender", "Unknown - Sender")
+                name = data.get("name", "Unknown - Sender Name")
                 message_type = data.get("type", "default")
                 ticker = data.get("ticker", "")
+                target = data.get("target", None)
                 timestamp = datetime.now(pytz.timezone("US/Eastern")).strftime(
                     "%Y-%m-%d %H:%M:%S.%f"
                 )
 
-                save_message(sender, name, message_type, timestamp, ticker)
-                broadcast_message = json.dumps(
-                    {
-                        "sender": sender,
-                        "name": name,
-                        "type": message_type,
-                        "timestamp": timestamp,
-                        "ticker": ticker,
-                        "old_message": False,
-                    }
-                )
+                broadcast_data = {
+                    "sender": sender,
+                    "name": name,
+                    "type": message_type,
+                    "timestamp": timestamp,
+                    "ticker": ticker,
+                    "old_message": False,
+                }
 
+                if target:
+                    broadcast_data["target"] = target
+
+                broadcast_message = json.dumps(broadcast_data)
                 await asyncio.gather(
                     *[client.send(broadcast_message) for client in connected_clients]
                 )
+                save_message(sender, name, message_type, timestamp, ticker, target)
+
     except websockets.ConnectionClosed:
         pass
     finally:

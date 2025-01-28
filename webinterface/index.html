@@ -319,7 +319,7 @@
         Object.entries(config.targets).forEach(([key, { name }]) => {
           const option = document.createElement("option");
           option.value = key;
-          option.textContent = name;
+          option.textContent = key;
           messageTarget.appendChild(option);
         });
 

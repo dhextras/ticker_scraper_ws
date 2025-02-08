@@ -11,34 +11,42 @@ load_dotenv()
 
 # Constants
 MESSAGES_FILE = "data/websocket_messages.json"
+IGNORED_MESSAGES_FILE = "data/ignored_messages.json"
+IGNORE_LIST_FILE = "data/ignore_list.json"
 WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
 
 
-def load_messages():
+def load_messages(filename):
     """Load messages from JSON file."""
     try:
-        with open(MESSAGES_FILE, "r") as f:
+        with open(filename, "r") as f:
             return json.load(f)
     except FileNotFoundError:
         return []
 
 
-def save_message(sender, name, message_type, timestamp, ticker, target=None):
-    """Save message to JSON file."""
-    messages = load_messages()
-    message = {
-        "sender": sender,
-        "name": name,
-        "type": message_type,
-        "timestamp": timestamp,
-        "ticker": ticker,
-    }
-    if target:
-        message["target"] = target
+def load_ignore_list():
+    """Load ignore list from JSON file."""
+    try:
+        with open(IGNORE_LIST_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
-    messages.append(message)
-    with open(MESSAGES_FILE, "w") as f:
+
+def should_ignore_message(sender, ticker, ignore_list):
+    """Check if message should be ignored based on sender and ticker."""
+    if sender in ignore_list:
+        return ticker.lower() in [t.lower() for t in ignore_list[sender]]
+    return False
+
+
+def save_message(message_data, filename):
+    """Save message to specified JSON file."""
+    messages = load_messages(filename)
+    messages.append(message_data)
+    with open(filename, "w") as f:
         json.dump(messages, f, indent=4)
 
 
@@ -48,12 +56,14 @@ connected_clients = set()
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
     connected_clients.add(websocket)
+    ignore_list = load_ignore_list()
+
     try:
         async for message in websocket:
             data = json.loads(message)
-            # Check if the client wants old messages
+
             if data.get("request_old_messages", False):
-                old_messages = load_messages()
+                old_messages = load_messages(MESSAGES_FILE)
                 for msg in old_messages:
                     msg["old_message"] = True
                 await websocket.send(json.dumps(old_messages))
@@ -67,7 +77,7 @@ async def handle_websocket(websocket, path):
                     "%Y-%m-%d %H:%M:%S.%f"
                 )
 
-                broadcast_data = {
+                message_data = {
                     "sender": sender,
                     "name": name,
                     "type": message_type,
@@ -75,15 +85,20 @@ async def handle_websocket(websocket, path):
                     "ticker": ticker,
                     "old_message": False,
                 }
-
                 if target:
-                    broadcast_data["target"] = target
+                    message_data["target"] = target
 
-                broadcast_message = json.dumps(broadcast_data)
-                await asyncio.gather(
-                    *[client.send(broadcast_message) for client in connected_clients]
-                )
-                save_message(sender, name, message_type, timestamp, ticker, target)
+                if should_ignore_message(sender, ticker, ignore_list):
+                    save_message(message_data, IGNORED_MESSAGES_FILE)
+                else:
+                    broadcast_message = json.dumps(message_data)
+                    await asyncio.gather(
+                        *[
+                            client.send(broadcast_message)
+                            for client in connected_clients
+                        ]
+                    )
+                    save_message(message_data, MESSAGES_FILE)
 
     except websockets.ConnectionClosed:
         pass

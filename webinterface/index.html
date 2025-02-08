@@ -301,8 +301,19 @@
 
         // Get current target from hash or use first target as default
         const getCurrentTarget = () => {
-          const hash = window.location.hash.slice(1); // remove the # symbol
-          return hash || Object.keys(config.targets)[0];
+          const hash = window.location.hash;
+          const target = Object.entries(config.targets).find(
+            ([_, value]) => value.path === hash,
+          );
+
+          if (!target) {
+            // If invalid hash, redirect to first target
+            const defaultTarget = Object.entries(config.targets)[0];
+            window.location.hash = defaultTarget[1].path.slice(1);
+            return defaultTarget[0];
+          }
+
+          return target[0];
         };
 
         // Populate sender dropdowns
@@ -316,17 +327,17 @@
         });
 
         // Populate target dropdown
-        Object.entries(config.targets).forEach(([key, { name }]) => {
+        Object.entries(config.targets).forEach(([key, { name, path }]) => {
           const option = document.createElement("option");
           option.value = key;
-          option.textContent = key;
+          option.textContent = name;
           messageTarget.appendChild(option);
         });
 
         // Populate menu
-        Object.entries(config.targets).forEach(([key, { name }]) => {
+        Object.entries(config.targets).forEach(([key, { name, path }]) => {
           const menuItem = document.createElement("a");
-          menuItem.href = `#${key}`;
+          menuItem.href = path;
           menuItem.className = "menu-item";
           menuItem.textContent = name;
 
@@ -339,14 +350,19 @@
 
         // Handle hash changes
         window.addEventListener("hashchange", () => {
-          currentPage = 1;
           const currentTarget = getCurrentTarget();
+          if (!currentTarget) return; // Exit if redirect is happening
+
+          currentPage = 1;
 
           // Update active menu item
           document.querySelectorAll(".menu-item").forEach((item) => {
+            const targetEntry = Object.entries(config.targets).find(
+              ([key, _]) => key === currentTarget,
+            );
             item.classList.toggle(
               "active",
-              item.getAttribute("href") === `#${currentTarget}`,
+              item.getAttribute("href") === targetEntry[1].path,
             );
           });
 
@@ -355,7 +371,8 @@
 
         // Initial redirect if no hash
         if (!window.location.hash) {
-          window.location.hash = `#${Object.keys(config.targets)[0]}`;
+          window.location.hash =
+            config.targets[Object.keys(config.targets)[0]].path.slice(1);
         }
 
         // Toggle menu

@@ -1,8 +1,6 @@
 import asyncio
-import fcntl
 import json
 import os
-import traceback
 from datetime import datetime
 
 import pytz
@@ -17,6 +15,13 @@ IGNORED_MESSAGES_FILE = "data/ignored_messages.json"
 IGNORE_LIST_FILE = "data/ignore_list.json"
 WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
+SAVE_DELAY = 3.0  # Seconds to wait before saving messages
+
+# In-memory message queues
+pending_messages = []
+pending_ignored_messages = []
+last_message_time = datetime.now()
+save_task = None
 
 
 def load_messages(filename):
@@ -44,38 +49,40 @@ def should_ignore_message(sender, ticker, ignore_list):
     return False
 
 
-def save_message(message_data, filename):
-    """Save message to specified JSON file with file locking and error handling."""
+def save_messages_to_file(messages, filename):
+    """Save collected messages to the specified JSON file."""
+    if not messages:
+        return
+
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
-    try:
-        file_exists = os.path.exists(filename)
-        with open(filename, "r+" if file_exists else "a+") as f:
-            # Lock the file to prevent race conditions
-            fcntl.flock(f, fcntl.LOCK_EX)
+    existing_messages = load_messages(filename)
 
-            try:
-                if file_exists:
-                    f.seek(0)
-                    content = f.read().strip()
-                    messages = json.loads(content) if content else []
-                else:
-                    messages = []
+    existing_messages.extend(messages)
 
-                messages.append(message_data)
+    with open(filename, "w") as f:
+        json.dump(existing_messages, f, indent=4)
 
-                f.seek(0)
-                f.truncate()
-                json.dump(messages, f, indent=4)
 
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+async def save_messages_after_delay():
+    """Save pending messages after a delay if no new messages arrive."""
+    global pending_messages, pending_ignored_messages
 
-        return True
-    except Exception as e:
-        print(f"Error saving message to {filename}: {str(e)}")
-        print(traceback.format_exc())
-        return False
+    while True:
+        await asyncio.sleep(SAVE_DELAY)
+        time_since_last_message = (datetime.now() - last_message_time).total_seconds()
+
+        # If enough time has passed, save the pending messages
+        if time_since_last_message >= SAVE_DELAY:
+            if pending_messages:
+                messages_to_save = pending_messages.copy()
+                pending_messages = []
+                save_messages_to_file(messages_to_save, MESSAGES_FILE)
+
+            if pending_ignored_messages:
+                ignored_to_save = pending_ignored_messages.copy()
+                pending_ignored_messages = []
+                save_messages_to_file(ignored_to_save, IGNORED_MESSAGES_FILE)
 
 
 connected_clients = set()
@@ -83,13 +90,16 @@ connected_clients = set()
 
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
+    global last_message_time, pending_messages, pending_ignored_messages
+
     connected_clients.add(websocket)
     ignore_list = load_ignore_list()
 
     try:
         async for message in websocket:
-            data = json.loads(message)
+            last_message_time = datetime.now()
 
+            data = json.loads(message)
             if data.get("request_old_messages", False):
                 old_messages = load_messages(MESSAGES_FILE)
                 for msg in old_messages:
@@ -113,11 +123,12 @@ async def handle_websocket(websocket, path):
                     "ticker": ticker,
                     "old_message": False,
                 }
+
                 if target:
                     message_data["target"] = target
 
                 if should_ignore_message(sender, ticker, ignore_list):
-                    save_message(message_data, IGNORED_MESSAGES_FILE)
+                    pending_ignored_messages.append(message_data)
                 else:
                     broadcast_message = json.dumps(message_data)
                     await asyncio.gather(
@@ -126,7 +137,8 @@ async def handle_websocket(websocket, path):
                             for client in connected_clients
                         ]
                     )
-                    save_message(message_data, MESSAGES_FILE)
+
+                    pending_messages.append(message_data)
 
     except websockets.ConnectionClosed:
         pass
@@ -135,12 +147,29 @@ async def handle_websocket(websocket, path):
 
 
 async def main():
-    """Start the WebSocket server."""
+    """Start the WebSocket server and background save task."""
+    save_task = asyncio.create_task(save_messages_after_delay())
     server = await websockets.serve(
         handle_websocket, WS_HOST, WS_PORT, ping_interval=None, ping_timeout=None
     )
+
     print(f"WebSocket server running on ws://{WS_HOST}:{WS_PORT}")
-    await server.wait_closed()
+    print(f"Messages will be saved after {SAVE_DELAY} seconds of inactivity")
+
+    try:
+        await server.wait_closed()
+    finally:
+        if save_task:
+            save_task.cancel()
+            try:
+                await save_task
+            except asyncio.CancelledError:
+                pass
+
+            if pending_messages:
+                save_messages_to_file(pending_messages, MESSAGES_FILE)
+            if pending_ignored_messages:
+                save_messages_to_file(pending_ignored_messages, IGNORED_MESSAGES_FILE)
 
 
 if __name__ == "__main__":

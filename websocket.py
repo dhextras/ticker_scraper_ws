@@ -1,6 +1,8 @@
 import asyncio
+import fcntl
 import json
 import os
+import traceback
 from datetime import datetime
 
 import pytz
@@ -43,11 +45,37 @@ def should_ignore_message(sender, ticker, ignore_list):
 
 
 def save_message(message_data, filename):
-    """Save message to specified JSON file."""
-    messages = load_messages(filename)
-    messages.append(message_data)
-    with open(filename, "w") as f:
-        json.dump(messages, f, indent=4)
+    """Save message to specified JSON file with file locking and error handling."""
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    try:
+        file_exists = os.path.exists(filename)
+        with open(filename, "r+" if file_exists else "a+") as f:
+            # Lock the file to prevent race conditions
+            fcntl.flock(f, fcntl.LOCK_EX)
+
+            try:
+                if file_exists:
+                    f.seek(0)
+                    content = f.read().strip()
+                    messages = json.loads(content) if content else []
+                else:
+                    messages = []
+
+                messages.append(message_data)
+
+                f.seek(0)
+                f.truncate()
+                json.dump(messages, f, indent=4)
+
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+        return True
+    except Exception as e:
+        print(f"Error saving message to {filename}: {str(e)}")
+        print(traceback.format_exc())
+        return False
 
 
 connected_clients = set()

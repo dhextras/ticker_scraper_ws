@@ -15,7 +15,7 @@ IGNORED_MESSAGES_FILE = "data/ignored_messages.json"
 IGNORE_LIST_FILE = "data/ignore_list.json"
 WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
-SAVE_DELAY = 3.0  # Seconds to wait before saving messages
+SAVE_DELAY = 5.0  # Seconds to wait before saving messages
 
 # In-memory message queues
 pending_messages = []

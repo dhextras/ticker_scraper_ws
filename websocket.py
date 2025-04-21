@@ -115,6 +115,9 @@ async def handle_websocket(websocket, path):
                     "%Y-%m-%d %H:%M:%S.%f"
                 )
 
+                if not ticker or ticker == "":
+                    continue
+
                 message_data = {
                     "sender": sender,
                     "name": name,
@@ -139,6 +142,8 @@ async def handle_websocket(websocket, path):
                     )
 
                     pending_messages.append(message_data)
+
+                print(f"[{timestamp}] - RECEIVED - {data}")
 
     except websockets.ConnectionClosed:
         pass

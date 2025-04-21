@@ -98,9 +98,12 @@ async def handle_websocket(websocket, path):
     try:
         async for message in websocket:
             last_message_time = datetime.now()
-
             data = json.loads(message)
-            if data.get("request_old_messages", False):
+
+            # ping (1) & pong (2)
+            if data == "[1":
+                await websocket.send("[2")
+            elif data.get("request_old_messages", False):
                 old_messages = load_messages(MESSAGES_FILE)
                 for msg in old_messages:
                     msg["old_message"] = True

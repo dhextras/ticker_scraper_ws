@@ -132,7 +132,7 @@ class TCPClient:
         try:
             message_json = json.dumps(message_data)
             await asyncio.get_event_loop().sock_sendall(
-                self.socket, (message_json + "\n").encode()
+                self.socket, (message_json + "<END>").encode()
             )
             return True
         except Exception as e:

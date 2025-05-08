@@ -9,8 +9,8 @@ import time
 
 import pytz
 import websockets
-from Cryptodome.Cipher import AES
-from Cryptodome.Util.Padding import pad
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
 from dotenv import load_dotenv
 
 from utils.logger import log_message

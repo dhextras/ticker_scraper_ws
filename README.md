@@ -45,6 +45,7 @@ pip install -r requirements.txt
    WS_PORT=8080
    TCP_HOST=your_tcp_server_host
    TCP_PORT=3005
+   TCP_USERNAME=username
    TCP_SECRET=your_secret_key
    TELEGRAM_BOT_TOKEN=your_bot_token
    TELEGRAM_CHAT_ID=group_id

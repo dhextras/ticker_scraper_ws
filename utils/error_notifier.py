@@ -12,8 +12,8 @@ from utils.telegram_sender import send_telegram_message
 
 load_dotenv()
 
-ERROR_NOTIFY_BOT_TOKEN = os.getenv("ERROR_NOTIFY_BOT_TOKEN")
-ERROR_NOTIFY_GRP = os.getenv("ERROR_NOTIFY_GRP")
+ERROR_NOTIFY_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ERROR_NOTIFY_GRP = os.getenv("TELEGRAM_CHAT_ID")
 LEVEL_EMOJIS = {
     "DEBUG": "🔍",
     "WARNING": "ℹ️",

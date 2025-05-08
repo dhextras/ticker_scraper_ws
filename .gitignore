@@ -2,6 +2,7 @@ data/
 venv/
 log/
 
+**/__pycache__/
 webinterface/config.js
 
 .env

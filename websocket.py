@@ -130,7 +130,7 @@ class EncryptedTcpClient:
                     # Send message
                     self.sock.sendall((f"{message}<END>").encode("utf-8"))
                     if "heartbeat" not in message.lower():
-                        log_message(f"[TCP] Sent message: {message}", "DEBUG")
+                        log_message(f"[TCP] Sent message: {message}", "INFO")
                 except Exception as e:
                     log_message(f"[TCP] Send error: {e}", "ERROR")
                     self.connected = False
@@ -149,7 +149,7 @@ class EncryptedTcpClient:
                     break
 
                 text = data.decode("utf-8", errors="ignore")
-                log_message(f"[TCP] Received: {text}", "DEBUG")
+                log_message(f"[TCP] Received: {text}", "INFO")
             except Exception as e:
                 log_message(f"[TCP] Receive error: {e}", "ERROR")
                 self.connected = False
@@ -289,7 +289,7 @@ async def handle_websocket(websocket, path):
 
                 if should_ignore_message(sender, ticker, ignore_list):
                     pending_ignored_messages.append(message_data)
-                    log_message(f"Ignored message: {message_data}", "DEBUG")
+                    log_message(f"Ignored message: {message_data}", "INFO")
                 else:
                     # Forward the message to the TCP server first
                     if tcp_client and tcp_client.connected:

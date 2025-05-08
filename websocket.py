@@ -9,15 +9,12 @@ import time
 
 import pytz
 import websockets
+from Cryptodome.Cipher import AES
+from Cryptodome.Util.Padding import pad
 from dotenv import load_dotenv
 
-# Try Crypto import, fallback to Cryptodome if needed
-try:
-    from Crypto.Cipher import AES
-    from Crypto.Util.Padding import pad, unpad
-except ImportError:
-    from Cryptodome.Cipher import AES
-    from Cryptodome.Util.Padding import pad, unpad
+from utils.logger import log_message
+from utils.telegram_sender import send_telegram_message
 
 load_dotenv()
 
@@ -29,10 +26,10 @@ WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
 TCP_HOST = os.getenv("TCP_HOST")
 TCP_PORT = int(os.getenv("TCP_PORT", 3005))
-TCP_SECRET = os.getenv(
-    "TCP_SECRET", "asuhd98y41924ydsfHJIASH7342haaavshd84tHUAsdahjfvsjkh234gf2hjfv"
-)
-TCP_USERNAME = os.getenv("TCP_USERNAME", "client")
+TCP_SECRET = os.getenv("TCP_SECRET")
+TCP_USERNAME = os.getenv("TCP_USERNAME")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SAVE_DELAY = 5.0  # Seconds to wait before saving messages
 
 # In-memory message queues
@@ -68,12 +65,6 @@ class EncryptedTcpClient:
         padded = pad(plaintext.encode("utf-8"), AES.block_size)
         return cipher.encrypt(padded)
 
-    def _decrypt(self, ciphertext: bytes) -> str:
-        iv = b"\x00" * 16
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        decrypted_padded = cipher.decrypt(ciphertext)
-        return unpad(decrypted_padded, AES.block_size).decode("utf-8")
-
     def connect(self):
         """
         Connects to the server, performs authentication (IV + ciphertext),
@@ -84,7 +75,9 @@ class EncryptedTcpClient:
                 # Establish TCP connection
                 self.sock = socket.create_connection((self.server_ip, self.server_port))
                 self.connected = True
-                print(f"[TCP] Connected to {self.server_ip}:{self.server_port}")
+                log_message(
+                    f"[TCP] Connected to {self.server_ip}:{self.server_port}", "INFO"
+                )
 
                 # Derive fresh key daily
                 self.key = self._derive_key()
@@ -93,7 +86,9 @@ class EncryptedTcpClient:
                 iv = b"\x00" * 16
                 encrypted_username = self._encrypt(self.username)
                 self.sock.sendall(iv + encrypted_username)
-                print(f"[TCP] Sent encrypted auth for username '{self.username}'")
+                log_message(
+                    f"[TCP] Sent encrypted auth for username '{self.username}'", "INFO"
+                )
 
                 # 2) Start background threads
                 threading.Thread(target=self._receive_loop, daemon=True).start()
@@ -105,9 +100,9 @@ class EncryptedTcpClient:
                 self.send_message("Hello, server!")
 
             except Exception as e:
-                print(f"[TCP] Connection error: {e}")
+                log_message(f"[TCP] Connection error: {e}", "ERROR")
                 self.connected = False
-                print("[TCP] Attempting to reconnect...")
+                log_message("[TCP] Attempting to reconnect...", "WARNING")
 
                 # Sleep before reconnecting
                 time.sleep(5)
@@ -132,12 +127,12 @@ class EncryptedTcpClient:
                     if isinstance(message, dict):
                         message = json.dumps(message)
 
-                    # Encrypt and send message
+                    # Send message
                     self.sock.sendall((f"{message}<END>").encode("utf-8"))
                     if "heartbeat" not in message.lower():
-                        print(f"[TCP] Sent message: {message}")
+                        log_message(f"[TCP] Sent message: {message}", "DEBUG")
                 except Exception as e:
-                    print(f"[TCP] Send error: {e}")
+                    log_message(f"[TCP] Send error: {e}", "ERROR")
                     self.connected = False
                     self.reconnect()
 
@@ -148,18 +143,15 @@ class EncryptedTcpClient:
             try:
                 data = self.sock.recv(4096)
                 if not data:
-                    print("[TCP] Server disconnected")
+                    log_message("[TCP] Server disconnected", "WARNING")
                     self.connected = False
                     self.reconnect()
                     break
-                try:
-                    msg = self._decrypt(data)
-                    print(f"[TCP] Received decrypted: {msg}")
-                except Exception:
-                    text = data.decode("utf-8", errors="ignore")
-                    print(f"[TCP] Received plaintext: {text}")
+
+                text = data.decode("utf-8", errors="ignore")
+                log_message(f"[TCP] Received: {text}", "DEBUG")
             except Exception as e:
-                print(f"[TCP] Receive error: {e}")
+                log_message(f"[TCP] Receive error: {e}", "ERROR")
                 self.connected = False
                 self.reconnect()
 
@@ -169,13 +161,13 @@ class EncryptedTcpClient:
             try:
                 self.send_message(f"HEARTBEAT")
             except Exception as e:
-                print(f"[TCP] Heartbeat error: {e}")
+                log_message(f"[TCP] Heartbeat error: {e}", "ERROR")
                 self.connected = False
                 self.reconnect()
 
     def reconnect(self):
         """Attempt to reconnect to the server"""
-        print("[TCP] Reconnecting...")
+        log_message("[TCP] Reconnecting...", "WARNING")
         if self.sock:
             try:
                 self.sock.close()
@@ -192,9 +184,9 @@ class EncryptedTcpClient:
         if self.thread is None or not self.thread.is_alive():
             self.thread = threading.Thread(target=self.connect, daemon=True)
             self.thread.start()
-            print("[TCP] Client thread started")
+            log_message("[TCP] Client thread started", "INFO")
         else:
-            print("[TCP] Client thread already running")
+            log_message("[TCP] Client thread already running", "INFO")
 
 
 def load_messages(filename):
@@ -234,6 +226,16 @@ def save_messages_to_file(messages, filename):
 
     with open(filename, "w") as f:
         json.dump(existing_messages, f, indent=4)
+
+    # Send notification about saved messages
+    if filename == MESSAGES_FILE and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        asyncio.create_task(
+            send_telegram_message(
+                f"Saved {len(messages)} new messages to {filename}",
+                TELEGRAM_BOT_TOKEN,
+                TELEGRAM_CHAT_ID,
+            )
+        )
 
 
 connected_clients = set()
@@ -287,12 +289,13 @@ async def handle_websocket(websocket, path):
 
                 if should_ignore_message(sender, ticker, ignore_list):
                     pending_ignored_messages.append(message_data)
+                    log_message(f"Ignored message: {message_data}", "DEBUG")
                 else:
                     # Forward the message to the TCP server first
                     if tcp_client and tcp_client.connected:
                         tcp_client.send_message(message_data)
                     else:
-                        print("[CRITICAL] TCP_CLIENT isn't Connected check why")
+                        log_message("TCP_CLIENT isn't Connected check why", "CRITICAL")
 
                     broadcast_message = json.dumps(message_data)
                     await asyncio.gather(
@@ -304,11 +307,29 @@ async def handle_websocket(websocket, path):
 
                     pending_messages.append(message_data)
 
-                print(f"[WS] [{timestamp}] - RECEIVED - {data}")
+                    message = (
+                        f"<b>New Message Received</b>\n\n"
+                        f"<b>Ticker:</b> {message_data['ticker'].upper()}\n"
+                        f"<b>Sender:</b> {message_data['sender']}\n"
+                        f"<b>Name:</b> {message_data['name']}\n"
+                        f"<b>Type:</b> {message_data['type']}\n"
+                        f"<b>Timestamp:</b> {message_data['timestamp']}\n"
+                    )
+
+                    asyncio.create_task(
+                        send_telegram_message(
+                            message,
+                            TELEGRAM_BOT_TOKEN,
+                            TELEGRAM_CHAT_ID,
+                        )
+                    )
+
+                log_message(f"[WS] [{timestamp}] - RECEIVED - {data}", "INFO")
 
     except websockets.ConnectionClosed:
-        print("[WS] WebSocket connection closed")
-        pass
+        log_message("[WS] WebSocket connection closed", "INFO")
+    except Exception as e:
+        log_message(f"[WS] WebSocket error: {e}", "ERROR")
     finally:
         connected_clients.remove(websocket)
 
@@ -329,11 +350,15 @@ async def save_messages_after_delay():
                 messages_to_save = pending_messages.copy()
                 pending_messages = []
                 save_messages_to_file(messages_to_save, MESSAGES_FILE)
+                log_message(f"Saved {len(messages_to_save)} messages to file", "INFO")
 
             if pending_ignored_messages:
                 ignored_to_save = pending_ignored_messages.copy()
                 pending_ignored_messages = []
                 save_messages_to_file(ignored_to_save, IGNORED_MESSAGES_FILE)
+                log_message(
+                    f"Saved {len(ignored_to_save)} ignored messages to file", "INFO"
+                )
 
 
 async def main():
@@ -348,18 +373,17 @@ async def main():
         username=TCP_USERNAME,
     )
     tcp_client.start()  # Start in a separate thread
-
-    # Start the save task
     save_task = asyncio.create_task(save_messages_after_delay())
 
-    # Start the WebSocket server
     server = await websockets.serve(
         handle_websocket, WS_HOST, WS_PORT, ping_interval=None, ping_timeout=None
     )
 
-    print(f"[SYSTEM] WebSocket server running on ws://{WS_HOST}:{WS_PORT}")
-    print(f"[SYSTEM] TCP client connecting to {TCP_HOST}:{TCP_PORT}")
-    print(f"[SYSTEM] Messages will be saved after {SAVE_DELAY} seconds of inactivity")
+    log_message(f"WebSocket server running on ws://{WS_HOST}:{WS_PORT}", "INFO")
+    log_message(f"TCP client connecting to {TCP_HOST}:{TCP_PORT}", "INFO")
+    log_message(
+        f"Messages will be saved after {SAVE_DELAY} seconds of inactivity", "INFO"
+    )
 
     try:
         await server.wait_closed()
@@ -373,8 +397,15 @@ async def main():
 
         if pending_messages:
             save_messages_to_file(pending_messages, MESSAGES_FILE)
+            log_message(
+                f"Saved remaining {len(pending_messages)} messages to file", "INFO"
+            )
         if pending_ignored_messages:
             save_messages_to_file(pending_ignored_messages, IGNORED_MESSAGES_FILE)
+            log_message(
+                f"Saved remaining {len(pending_ignored_messages)} ignored messages to file",
+                "INFO",
+            )
 
 
 if __name__ == "__main__":

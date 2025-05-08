@@ -44,8 +44,10 @@ pip install -r requirements.txt
    WS_HOST=0.0.0.0
    WS_PORT=8080
    TCP_HOST=your_tcp_server_host
-   TCP_PORT=9000
+   TCP_PORT=3005
    TCP_SECRET=your_secret_key
+   TELEGRAM_BOT_TOKEN=your_bot_token
+   TELEGRAM_CHAT_ID=group_id
    ```
    Replace `your_tcp_server_host` and `your_secret_key` with your actual TCP server details.
 
@@ -63,7 +65,7 @@ pip install -r requirements.txt
       },
       targets: {
          // Add the websocket targets here
-      }
+      _
    };
    ```
 
@@ -98,11 +100,18 @@ ticker_scraper_ws/
 ├── webinterface/            # Web interface files
 │   ├── index.html           # Main web interface
 │   ├── config.js            # Web interface configuration
+├── utils/                   # Utility scripts
+│   ├── __init__.py          # Makes the folder a package
+│   ├── base_logger.py       # Logger setup with timestamp and colored output
+│   ├── error_notifier.py    # Telegram error notification
+│   ├── logger.py            # Central logging functions
+│   └── telegram_sender.py   # Telegram message sender
 ├── websocket.py             # WebSocket server script
 ├── .env                     # Environment variables
 ├── .gitignore               # Git ignore file
 ├── requirements.txt         # Project dependencies
 └── README.md                # Project documentation
+ticker_scraper_ws
 ```
 
 ### Important Notes

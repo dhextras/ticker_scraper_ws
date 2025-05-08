@@ -2,3 +2,5 @@ data/
 venv/
 
 webinterface/config.js
+
+.env

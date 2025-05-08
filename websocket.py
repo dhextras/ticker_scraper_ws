@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import socket
 from datetime import datetime
 
 import pytz
@@ -15,6 +16,9 @@ IGNORED_MESSAGES_FILE = "data/ignored_messages.json"
 IGNORE_LIST_FILE = "data/ignore_list.json"
 WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
+TCP_HOST = os.getenv("TCP_HOST")
+TCP_PORT = int(os.getenv("TCP_PORT", 3000))
+TCP_SECRET = os.getenv("TCP_SECRET")
 SAVE_DELAY = 5.0  # Seconds to wait before saving messages
 
 # In-memory message queues
@@ -22,6 +26,7 @@ pending_messages = []
 pending_ignored_messages = []
 last_message_time = datetime.now()
 save_task = None
+tcp_client = None
 
 
 def load_messages(filename):
@@ -64,6 +69,85 @@ def save_messages_to_file(messages, filename):
         json.dump(existing_messages, f, indent=4)
 
 
+class TCPClient:
+    """TCP Client to forward messages to a TCP server."""
+
+    def __init__(self, host, port, secret):
+        self.host = host
+        self.port = port
+        self.secret = secret
+        self.socket = None
+        self.connected = False
+        self.reconnect_task = None
+
+    async def connect(self):
+        """Connect to the TCP server."""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.setblocking(False)
+
+            # Connect to the server asynchronously
+            await asyncio.get_event_loop().sock_connect(
+                self.socket, (self.host, self.port)
+            )
+
+            # Send authentication message
+            auth_message = json.dumps({"command": "auth", "secret": self.secret})
+            await asyncio.get_event_loop().sock_sendall(
+                self.socket, (auth_message + "\n").encode()
+            )
+
+            print(f"Connected to TCP server at {self.host}:{self.port}")
+            self.connected = True
+
+            if self.reconnect_task:
+                self.reconnect_task.cancel()
+                self.reconnect_task = None
+
+            return True
+        except Exception as e:
+            print(f"Failed to connect to TCP server: {e}")
+            self.connected = False
+            self.schedule_reconnect()
+            return False
+
+    def schedule_reconnect(self):
+        """Schedule a reconnection attempt."""
+        if not self.reconnect_task or self.reconnect_task.done():
+            self.reconnect_task = asyncio.create_task(self.reconnect())
+
+    async def reconnect(self):
+        """Attempt to reconnect to the TCP server after a delay."""
+        await asyncio.sleep(5)  # Wait 5 seconds before reconnecting
+        print("Attempting to reconnect to TCP server...")
+        await self.connect()
+
+    async def send_message(self, message_data):
+        """Send a message to the TCP server."""
+        if not self.connected:
+            await self.connect()
+            if not self.connected:
+                return False
+
+        try:
+            message_json = json.dumps(message_data)
+            await asyncio.get_event_loop().sock_sendall(
+                self.socket, (message_json + "\n").encode()
+            )
+            return True
+        except Exception as e:
+            print(f"Error sending message to TCP server: {e}")
+            self.connected = False
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
+            self.schedule_reconnect()
+            return False
+
+
 async def save_messages_after_delay():
     """Save pending messages after a delay if no new messages arrive."""
     global pending_messages, pending_ignored_messages
@@ -90,7 +174,7 @@ connected_clients = set()
 
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
-    global last_message_time, pending_messages, pending_ignored_messages
+    global last_message_time, pending_messages, pending_ignored_messages, tcp_client
 
     connected_clients.add(websocket)
     ignore_list = load_ignore_list()
@@ -136,6 +220,12 @@ async def handle_websocket(websocket, path):
                 if should_ignore_message(sender, ticker, ignore_list):
                     pending_ignored_messages.append(message_data)
                 else:
+                    # Forward the message to the TCP server first
+                    if tcp_client:
+                        await tcp_client.send_message(message_data)
+                    else:
+                        print("Critical: TCP_CLIENT isn't Connected check why")
+
                     broadcast_message = json.dumps(message_data)
                     await asyncio.gather(
                         *[
@@ -155,13 +245,20 @@ async def handle_websocket(websocket, path):
 
 
 async def main():
-    """Start the WebSocket server and background save task."""
+    """Start the WebSocket server, TCP client, and background save task."""
+    global tcp_client
+
+    tcp_client = TCPClient(TCP_HOST, TCP_PORT, TCP_SECRET)
+    asyncio.create_task(tcp_client.connect())
+
     save_task = asyncio.create_task(save_messages_after_delay())
+
     server = await websockets.serve(
         handle_websocket, WS_HOST, WS_PORT, ping_interval=None, ping_timeout=None
     )
 
     print(f"WebSocket server running on ws://{WS_HOST}:{WS_PORT}")
+    print(f"TCP client connecting to {TCP_HOST}:{TCP_PORT}")
     print(f"Messages will be saved after {SAVE_DELAY} seconds of inactivity")
 
     try:

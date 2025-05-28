@@ -3,4 +3,4 @@ websockets==10.4
 pytz
 pycryptodome
 aiohttp
-jwt
+PyJWT

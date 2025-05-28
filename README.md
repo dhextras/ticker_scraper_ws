@@ -10,11 +10,12 @@ Make sure you have the following installed:
 - **Python** (preferably version 3.6 or higher)
 - **pip** (Python package installer)
 - **virtualenv** (to create isolated Python environments)
+- **Node.js** (for JWT generation)
 
 If you don't have Python and pip installed, you can install them using the following command:
 ```bash
 sudo apt update
-sudo apt install python3 python3-pip python3-venv
+sudo apt install python3 python3-pip python3-venv nodejs
 ```
 
 ## Step 1: Setup the Virtual Environment
@@ -36,9 +37,18 @@ Install the required Python packages using:
 pip install -r requirements.txt
 ```
 
-## Step 3: Create a `.env` File
+## Step 3: Generate JWT Secret
 
-1. **Create a file named `.env` in the root directory.**
+Generate a secure JWT secret key using Node.js:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the output and use it in your `.env` file.
+
+## Step 4: Create a `.env` File
+
+1. **Create a file named `.env` in the root directory (you can use `.env.example` as a template).**
 2. **Add the following configuration:**
    ```
    WS_HOST=0.0.0.0
@@ -49,10 +59,11 @@ pip install -r requirements.txt
    TCP_SECRET=your_secret_key
    TELEGRAM_BOT_TOKEN=your_bot_token
    TELEGRAM_CHAT_ID=group_id
+   JWT_SECRET=your_generated_jwt_secret_from_step_3
    ```
-   Replace `your_tcp_server_host` and `your_secret_key` with your actual TCP server details.
+   Replace the placeholder values with your actual configuration details.
 
-## Step 4: Create a `webinterface/config.js` File
+## Step 5: Create a `webinterface/config.js` File
 
 1. **Create a file named `config.js` in the webinterface directory.**
 2. **Add the following details:**
@@ -60,63 +71,72 @@ pip install -r requirements.txt
    window.env = {
       WEBSOCKET_URL: "ws://<DOMAIN/IP>:8080", // Replace with your domain or IP address
    };
-   const config = {
+   window.config = {
       senders: {
          // Add all the senders here
       },
       targets: {
          // Add the websocket targets here
-      _
+      }
    };
    ```
 
-## Step 5: Running the WebSocket Server
+## Step 6: Running the Server
 
-1. **Start the WebSocket server:**
-   Navigate to the root directory of your project and run the following command:
+1. **Start the server with sudo privileges:**
+   Navigate to the root directory of your project and run:
    ```bash
-   python websocket.py
+   sudo python3 server.py
    ```
 
 2. **Verify the server is running:**
-   The WebSocket server should now be running and ready to handle incoming connections. You can use WebSocket client tools (like browser extensions or other tools) to test the connection.
+   The server should now be running and serving both the WebSocket server and the web interface. The web interface will be available on port 80.
 
-## Step 6: Hosting the Web Interface
+## Step 7: Access the Web Interface
 
-1. **Host the `index.html` file on port 80:**
-   To serve the web interface located in the `webinterface/` directory on port 80, you can use a simple HTTP server:
-   ```bash
-   sudo python3 -m http.server 80 --directory webinterface/
-   ```
-
-2. **Access the web interface:**
-   Open your web browser and go to `http://localhost` to see the web interface.
+Open your web browser and go to `http://localhost` or `http://your-server-ip` to access the web interface with authentication.
 
 ## File Structure Overview
 
-Here is a quick overview of the project structure:
+Here is the current project structure:
 ```plaintext
 ticker_scraper_ws/
-├── data/                    # Folder for storing data files
-├── webinterface/            # Web interface files
-│   ├── index.html           # Main web interface
-│   ├── config.js            # Web interface configuration
+├── .git/                    # Git repository files
+├── data/                    # Data storage directory
+│   ├── ignore_list.json     # List of ignored items
+│   ├── ignored_messages.json # Ignored messages data
+│   └── websocket_messages.json # WebSocket messages log
 ├── utils/                   # Utility scripts
 │   ├── __init__.py          # Makes the folder a package
 │   ├── base_logger.py       # Logger setup with timestamp and colored output
 │   ├── error_notifier.py    # Telegram error notification
 │   ├── logger.py            # Central logging functions
 │   └── telegram_sender.py   # Telegram message sender
+├── webinterface/            # Web interface files
+│   ├── app.js               # Main application JavaScript
+│   ├── auth.js              # Authentication handling
+│   ├── config.js            # Web interface configuration
+│   └── index.html           # Main web interface
 ├── websocket.py             # WebSocket server script
-├── .env                     # Environment variables
+├── server.py                # Main server script
+├── .env                     # Environment variables (create from .env.example)
+├── .env.example             # Environment variables template
 ├── .gitignore               # Git ignore file
 ├── requirements.txt         # Project dependencies
-└── README.md                # Project documentation
-ticker_scraper_ws
+└── README.md                # This documentation
 ```
 
-### Important Notes
+## Important Notes
 
-- Ensure to create and activate the virtual environment before installing dependencies.
-- The WebSocket server and web interface must be running simultaneously for the full functionality of the application.
-- The TCP client in the WebSocket server will attempt to connect to the TCP server specified in the `.env` file and forward all messages before broadcasting them to WebSocket clients.
+- **Authentication**: The web interface now includes JWT-based authentication for secure access.
+- **JWT Secret**: Always generate a new JWT secret for production environments using the provided Node.js command.
+- **Port 80**: The server runs on port 80 by default, which requires sudo privileges.
+- **Environment Variables**: Make sure to configure your `.env` file properly before running the server.
+- **Data Persistence**: The application stores data in JSON files within the `data/` directory.
+
+## Troubleshooting
+
+- If you encounter permission errors, make sure you're running the server with `sudo`.
+- Ensure all environment variables in `.env` are properly configured.
+- Check that ports 80 and 8080 are not being used by other applications.
+- Verify your JWT secret is properly generated and added to the `.env` file.

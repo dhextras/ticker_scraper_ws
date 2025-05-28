@@ -3,13 +3,75 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebSocket Message Table</title>
+    <title>WebSocket Message Table - Login</title>
     <style>
       body {
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 20px;
         background-color: #f4f4f9;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .login-container {
+        flex-direction: column;
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        max-width: 400px;
+        width: 100%;
+      }
+      .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      label {
+        font-weight: bold;
+        color: #333;
+      }
+      input {
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      button {
+        padding: 12px 16px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      .error {
+        color: #f44336;
+        font-size: 14px;
+        margin-top: 5px;
+      }
+      .title {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #333;
+      }
+      .app-container {
+        display: none;
       }
       .controls-container {
         display: flex;
@@ -110,24 +172,12 @@
       th:hover {
         background-color: #e6e6e6;
       }
-      select,
-      input {
+      select {
         padding: 8px;
         margin-right: 10px;
         border: 1px solid #ddd;
         border-radius: 4px;
         width: 200px;
-      }
-      button {
-        padding: 8px 16px;
-        background-color: #4caf50;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      button:hover {
-        background-color: #45a049;
       }
       .pagination {
         display: flex;
@@ -149,6 +199,18 @@
         background-color: #cccccc;
         border-color: #cccccc;
         cursor: not-allowed;
+      }
+      .logout-btn {
+        color: white;
+        border: none;
+        padding: 11px 15px 9px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 21px;
+        background-color: #f44336;
+      }
+      .logout-btn:hover {
+        background-color: #d32f2f;
       }
 
       @media (max-width: 1200px) {
@@ -203,479 +265,100 @@
     </style>
   </head>
   <body>
-    <h1>WebSocket Message Table</h1>
+    <!-- Login Screen -->
+    <div id="login-container" class="login-container">
+      <h1 class="title">WebSocket Message Table</h1>
+      <form class="login-form" id="login-form">
+        <div class="form-group">
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password:</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button type="submit" id="login-btn">Login</button>
+        <div id="login-error" class="error" style="display: none"></div>
+      </form>
+    </div>
 
-    <div class="controls-container">
-      <div class="menu-container">
-        <button id="menu-button" class="menu-button">☰</button>
-        <div id="menu-dropdown" class="menu-dropdown">
-          <!-- Will be populated from config.targets -->
+    <!-- Main App (hidden initially) -->
+    <div id="app-container" class="app-container">
+      <h1>WebSocket Message Table</h1>
+
+      <div class="controls-container">
+        <div class="menu-container">
+          <button id="menu-button" class="menu-button">☰</button>
+          <button id="logout-btn" class="logout-btn">Logout</button>
+          <div id="menu-dropdown" class="menu-dropdown">
+            <!-- Will be populated from config.targets -->
+          </div>
+        </div>
+
+        <div class="search-section">
+          <input type="text" id="search" placeholder="Search tickers..." />
+          <select id="sender-filter" class="compact">
+            <option value="">Filter by Sender</option>
+          </select>
+          <select id="page-size" class="compact">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="75">75</option>
+            <option value="100">100</option>
+            <option value="150">150</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+            <option value="400">400</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+          </select>
+        </div>
+
+        <div class="date-filter-section">
+          <input type="date" id="start-date" class="compact" />
+          <input type="date" id="end-date" class="compact" />
+        </div>
+
+        <div class="form-section">
+          <select id="sender" class="compact">
+            <!-- Options will be appended here -->
+          </select>
+          <select id="type" class="compact">
+            <option value="">Select Type</option>
+            <option value="Buy">Buy</option>
+            <option value="Sell">Sell</option>
+          </select>
+          <select id="message-target" class="compact">
+            <option value="">No Target</option>
+            <!-- Will be populated from config.targets -->
+          </select>
+          <button id="send-button">Send</button>
         </div>
       </div>
 
-      <div class="search-section">
-        <input type="text" id="search" placeholder="Search tickers..." />
-        <select id="sender-filter" class="compact">
-          <option value="">Filter by Sender</option>
-        </select>
-        <select id="page-size" class="compact">
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="30">30</option>
-          <option value="40">40</option>
-          <option value="50">50</option>
-          <option value="75">75</option>
-          <option value="100">100</option>
-          <option value="150">150</option>
-          <option value="200">200</option>
-          <option value="300">300</option>
-          <option value="400">400</option>
-          <option value="500">500</option>
-          <option value="1000">1000</option>
-        </select>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="sender">Sender ↕</th>
+            <th data-sort="type">Type ↕</th>
+            <th data-sort="ticker">Ticker ↕</th>
+            <th data-sort="timestamp">Timestamp ↕</th>
+          </tr>
+        </thead>
+        <tbody id="message-table-body">
+          <!-- Messages will be appended here -->
+        </tbody>
+      </table>
 
-      <div class="date-filter-section">
-        <input type="date" id="start-date" class="compact" />
-        <input type="date" id="end-date" class="compact" />
-      </div>
-
-      <div class="form-section">
-        <select id="sender" class="compact">
-          <!-- Options will be appended here -->
-        </select>
-        <select id="type" class="compact">
-          <option value="">Select Type</option>
-          <option value="Buy">Buy</option>
-          <option value="Sell">Sell</option>
-        </select>
-        <select id="message-target" class="compact">
-          <option value="">No Target</option>
-          <!-- Will be populated from config.targets -->
-        </select>
-        <button id="send-button">Send</button>
+      <div class="pagination" id="pagination">
+        <!-- Pagination buttons will be added here -->
       </div>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th data-sort="sender">Sender ↕</th>
-          <th data-sort="type">Type ↕</th>
-          <th data-sort="ticker">Ticker ↕</th>
-          <th data-sort="timestamp">Timestamp ↕</th>
-        </tr>
-      </thead>
-      <tbody id="message-table-body">
-        <!-- Messages will be appended here -->
-      </tbody>
-    </table>
-
-    <div class="pagination" id="pagination">
-      <!-- Pagination buttons will be added here -->
-    </div>
-
-    <script src="config.js"></script>
-
-    <script>
-      let socket;
-      let pushEnabled = false;
-      let allMessages = [];
-      let currentPage = 1;
-      let messagesPerPage = 10;
-      let currentSort = { field: "timestamp", ascending: false };
-
-      window.onload = function () {
-        const endDate = document.getElementById("end-date");
-        const typeDropdown = document.getElementById("type");
-        const pageSize = document.getElementById("page-size");
-        const searchInput = document.getElementById("search");
-        const startDate = document.getElementById("start-date");
-        const senderDropdown = document.getElementById("sender");
-        const sendButton = document.getElementById("send-button");
-        const menuButton = document.getElementById("menu-button");
-        const menuDropdown = document.getElementById("menu-dropdown");
-        const senderFilter = document.getElementById("sender-filter");
-        const messageTarget = document.getElementById("message-target");
-        const messageTableBody = document.getElementById("message-table-body");
-
-        // Get current target from hash or use first target as default
-        const getCurrentTarget = () => {
-          const hash = window.location.hash;
-          const target = Object.entries(config.targets).find(
-            ([_, value]) => value.path === hash,
-          );
-
-          if (!target) {
-            // If invalid hash, redirect to first target
-            const defaultTarget = Object.entries(config.targets)[0];
-            window.location.hash = defaultTarget[1].path.slice(1);
-            return defaultTarget[0];
-          }
-
-          return target[0];
-        };
-
-        // Populate sender dropdowns
-        Object.entries(config.senders).forEach(([key, { name }]) => {
-          [senderDropdown, senderFilter].forEach((dropdown) => {
-            const option = document.createElement("option");
-            option.value = key;
-            option.textContent = name;
-            dropdown.appendChild(option);
-          });
-        });
-
-        // Populate target dropdown
-        Object.entries(config.targets).forEach(([key, { name, path }]) => {
-          const option = document.createElement("option");
-          option.value = key;
-          option.textContent = name;
-          messageTarget.appendChild(option);
-        });
-
-        // Populate menu
-        Object.entries(config.targets).forEach(([key, { name, path }]) => {
-          const menuItem = document.createElement("a");
-          menuItem.href = path;
-          menuItem.className = "menu-item";
-          menuItem.textContent = name;
-
-          if (key === getCurrentTarget()) {
-            menuItem.classList.add("active");
-          }
-
-          menuDropdown.appendChild(menuItem);
-        });
-
-        // Handle hash changes
-        window.addEventListener("hashchange", () => {
-          const currentTarget = getCurrentTarget();
-          if (!currentTarget) return; // Exit if redirect is happening
-
-          currentPage = 1;
-
-          // Update active menu item
-          document.querySelectorAll(".menu-item").forEach((item) => {
-            const targetEntry = Object.entries(config.targets).find(
-              ([key, _]) => key === currentTarget,
-            );
-            item.classList.toggle(
-              "active",
-              item.getAttribute("href") === targetEntry[1].path,
-            );
-          });
-
-          refreshTable();
-        });
-
-        // Initial redirect if no hash
-        if (!window.location.hash) {
-          window.location.hash =
-            config.targets[Object.keys(config.targets)[0]].path.slice(1);
-        }
-
-        // Toggle menu
-        menuButton.addEventListener("click", (e) => {
-          e.stopPropagation();
-          menuDropdown.classList.toggle("show");
-        });
-
-        // Close menu when clicking outside
-        document.addEventListener("click", (e) => {
-          if (
-            !menuDropdown.contains(e.target) &&
-            !menuButton.contains(e.target)
-          ) {
-            menuDropdown.classList.remove("show");
-          }
-        });
-
-        // Setup event listeners on tool bar functions
-        endDate.addEventListener("change", refreshTable);
-        pageSize.addEventListener("change", refreshTable);
-        startDate.addEventListener("change", refreshTable);
-        searchInput.addEventListener("input", refreshTable);
-        senderFilter.addEventListener("change", refreshTable);
-
-        // Setup sorting
-        document.querySelectorAll("th[data-sort]").forEach((th) => {
-          th.addEventListener("click", () => {
-            const field = th.dataset.sort;
-            if (currentSort.field === field) {
-              currentSort.ascending = !currentSort.ascending;
-            } else {
-              currentSort.field = field;
-              currentSort.ascending = true;
-            }
-            refreshTable();
-          });
-        });
-
-        requestNotificationPermission();
-
-        // Connect to WebSocket
-        socket = new WebSocket(window.env.WEBSOCKET_URL);
-
-        socket.onopen = function () {
-          console.log("Connected to WebSocket server");
-          if (pushEnabled) {
-            new Notification("WebSocket Connected", {
-              body: "You are now connected to the WebSocket server",
-            });
-          }
-
-          socket.send(JSON.stringify({ request_old_messages: true }));
-        };
-
-        socket.onmessage = function (event) {
-          const data = JSON.parse(event.data);
-          if (Array.isArray(data)) {
-            // Handle initial messages load
-            allMessages = data;
-          } else {
-            // Handle new message
-            allMessages.unshift(data);
-          }
-          refreshTable();
-        };
-
-        sendButton.addEventListener("click", function () {
-          const sender = senderDropdown.value;
-          const name = `${config.senders[sender]?.name || sender} - TEST`;
-          const messageType = typeDropdown.value;
-          const target = messageTarget.value;
-
-          if (sender && messageType) {
-            const data = {
-              sender,
-              name,
-              type: messageType,
-              ticker: "TEST_IGNORE",
-            };
-
-            if (target) data.target = target;
-            socket.send(JSON.stringify(data));
-            senderDropdown.selectedIndex = 0;
-            typeDropdown.selectedIndex = 0;
-            messageTarget.selectedIndex = 0;
-          } else {
-            alert("Choose a Name and a Type before sending.");
-          }
-        });
-
-        function refreshTable() {
-          // Update page size and get current target from hash
-          messagesPerPage = parseInt(pageSize.value);
-          const currentTarget = getCurrentTarget();
-
-          // Apply filters
-          let filteredMessages = allMessages.filter((message) => {
-            const searchTerm = searchInput.value.toLowerCase();
-            const senderFilterValue = senderFilter.value;
-            const startDateValue = startDate.value
-              ? new Date(startDate.value)
-              : null;
-            const endDateValue = endDate.value ? new Date(endDate.value) : null;
-
-            // Filter by current target
-            const targetMatches =
-              currentTarget === "unknown"
-                ? message.target &&
-                  message.target in Object.keys(config.targets)
-                : !message.target
-                  ? true
-                  : message.target === currentTarget;
-
-            return (
-              (!searchTerm ||
-                message.ticker.toLowerCase().includes(searchTerm)) &&
-              (!senderFilterValue || message.sender === senderFilterValue) &&
-              (!startDateValue ||
-                new Date(message.timestamp) >= startDateValue) &&
-              (!endDateValue || new Date(message.timestamp) <= endDateValue) &&
-              targetMatches
-            );
-          });
-
-          // Sort messages
-          filteredMessages.sort((a, b) => {
-            let aValue = a[currentSort.field];
-            let bValue = b[currentSort.field];
-
-            if (currentSort.field === "timestamp") {
-              aValue = new Date(aValue);
-              bValue = new Date(bValue);
-            }
-
-            const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-            return currentSort.ascending ? comparison : -comparison;
-          });
-
-          // Update pagination
-          const totalPages = Math.ceil(
-            filteredMessages.length / messagesPerPage,
-          );
-          currentPage = Math.min(currentPage, totalPages);
-          currentPage = currentPage === 0 && totalPages > 0 ? 1 : currentPage;
-          updatePagination(totalPages);
-
-          // Display current page
-          const start = (currentPage - 1) * messagesPerPage;
-          const end = start + parseInt(messagesPerPage);
-          const pageMessages = filteredMessages.slice(start, end);
-
-          // Clear and repopulate table
-          messageTableBody.innerHTML = "";
-          pageMessages.forEach((message) => {
-            const isNewMessage =
-              !message.old_message && message.old_message === false;
-
-            addRowToTable(
-              message.name,
-              message.sender,
-              message.type,
-              message.ticker,
-              message.timestamp,
-            );
-
-            if (isNewMessage) {
-              if (pushEnabled) {
-                new Notification(message.name, {
-                  body: `${message.type} ${message.ticker || "N/A"}`,
-                });
-              }
-            }
-          });
-
-          // Update sort indicators
-          document.querySelectorAll("th[data-sort]").forEach((th) => {
-            const field = th.dataset.sort;
-            th.textContent = th.textContent.replace(" ↑", "").replace(" ↓", "");
-            if (field === currentSort.field) {
-              th.textContent += currentSort.ascending ? " ↑" : " ↓";
-            }
-          });
-        }
-
-        function updatePagination(totalPages) {
-          const pagination = document.getElementById("pagination");
-          pagination.innerHTML = "";
-
-          if (totalPages <= 1) return;
-
-          // Previous button
-          addPaginationButton("«", currentPage > 1, () => {
-            currentPage--;
-            refreshTable();
-          });
-
-          // Calculate visible page numbers
-          let startPage = Math.max(1, currentPage - 2);
-          let endPage = Math.min(totalPages, startPage + 4);
-          startPage = Math.max(1, endPage - 4);
-
-          if (startPage > 1) {
-            addPaginationButton("1", true, () => {
-              currentPage = 1;
-              refreshTable();
-            });
-            if (startPage > 2) {
-              pagination.appendChild(document.createTextNode("..."));
-            }
-          }
-
-          for (let i = startPage; i <= endPage; i++) {
-            addPaginationButton(
-              i.toString(),
-              true,
-              () => {
-                currentPage = i;
-                refreshTable();
-              },
-              i === currentPage,
-            );
-          }
-
-          if (endPage < totalPages) {
-            if (endPage < totalPages - 1) {
-              pagination.appendChild(document.createTextNode("..."));
-            }
-            addPaginationButton(totalPages.toString(), true, () => {
-              currentPage = totalPages;
-              refreshTable();
-            });
-          }
-
-          // Next button
-          addPaginationButton("»", currentPage < totalPages, () => {
-            currentPage++;
-            refreshTable();
-          });
-        }
-
-        function addPaginationButton(text, enabled, onClick, isActive = false) {
-          const button = document.createElement("button");
-          button.textContent = text;
-          button.disabled = !enabled;
-          if (isActive) button.classList.add("active");
-          button.addEventListener("click", onClick);
-          document.getElementById("pagination").appendChild(button);
-        }
-
-        function addRowToTable(name, sender, type, ticker, timestamp) {
-          const row = document.createElement("tr");
-          const senderCell = document.createElement("td");
-          const typeCell = document.createElement("td");
-          const tickerCell = document.createElement("td");
-          const timestampCell = document.createElement("td");
-
-          senderCell.textContent =
-            name || config.senders[sender]?.name || sender;
-          typeCell.textContent = type;
-          tickerCell.textContent = ticker || "N/A";
-          timestampCell.textContent = formatDate(timestamp);
-
-          row.style.backgroundColor =
-            config.senders[sender]?.color || "#FFFFFF";
-
-          row.appendChild(senderCell);
-          row.appendChild(typeCell);
-          row.appendChild(tickerCell);
-          row.appendChild(timestampCell);
-          messageTableBody.appendChild(row);
-        }
-
-        async function requestNotificationPermission() {
-          if (!("Notification" in window)) {
-            alert("This browser does not support desktop notifications");
-            return;
-          }
-
-          try {
-            const permission = await Notification.requestPermission();
-            pushEnabled = permission === "granted";
-            if (!permission) alert("Notification permission denied");
-          } catch (error) {
-            console.error("Error requesting notification permission:", error);
-          }
-        }
-
-        function formatDate(timestamp) {
-          const tempDate = timestamp ? new Date(timestamp) : new Date();
-          return (
-            `${tempDate.getMonth() + 1}/${tempDate.getDate()}/${tempDate.getFullYear()}, ` +
-            `${tempDate.getHours() % 12 || 12}:${tempDate
-              .getMinutes()
-              .toString()
-              .padStart(2, "0")}:${tempDate
-              .getSeconds()
-              .toString()
-              .padStart(2, "0")}.${tempDate.getMilliseconds()} ` +
-            `${tempDate.getHours() >= 12 ? "PM" : "AM"}`
-          );
-        }
-      };
-    </script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>

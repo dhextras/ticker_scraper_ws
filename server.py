@@ -5,6 +5,9 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
 import jwt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 USERNAME = os.getenv("USERNAME", "admin")
 PASSWORD = os.getenv("PASSWORD", "password123")

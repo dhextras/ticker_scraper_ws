@@ -293,7 +293,8 @@ async def handle_websocket(websocket, path):
                 else:
                     # Forward the message to the TCP server first
                     if tcp_client and tcp_client.connected:
-                        tcp_client.send_message(message_data)
+                        if not data.get("processed", False):
+                            tcp_client.send_message(message_data)
                     else:
                         log_message("TCP_CLIENT isn't Connected check why", "CRITICAL")
 

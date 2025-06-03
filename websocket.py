@@ -268,6 +268,7 @@ async def handle_websocket(websocket, path):
                 message_type = data.get("type", "default")
                 ticker = data.get("ticker", "")
                 target = data.get("target", None)
+                shares = data.get("shares", None)
                 timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")).strftime(
                     "%Y-%m-%d %H:%M:%S.%f"
                 )
@@ -283,6 +284,9 @@ async def handle_websocket(websocket, path):
                     "ticker": ticker,
                     "old_message": False,
                 }
+
+                if shares:
+                    message_data["shares"] = shares
 
                 if target:
                     message_data["target"] = target

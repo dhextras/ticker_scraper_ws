@@ -286,7 +286,8 @@ async def handle_websocket(websocket, path):
                 }
 
                 if shares:
-                    message_data["shares"] = shares
+                    message_data["shares"] = str(shares)
+                    message_data.pop("timestamp")
 
                 if target:
                     message_data["target"] = target

@@ -3,6 +3,7 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import socket
 import threading
 import time
@@ -22,6 +23,7 @@ load_dotenv()
 MESSAGES_FILE = "data/websocket_messages.json"
 IGNORED_MESSAGES_FILE = "data/ignored_messages.json"
 IGNORE_LIST_FILE = "data/ignore_list.json"
+BACKUP_BASE_DIR = "data/backup"
 WS_HOST = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.getenv("WS_PORT", 8080))
 TCP_HOST = os.getenv("TCP_HOST")
@@ -35,8 +37,9 @@ SAVE_DELAY = 5.0  # Seconds to wait before saving messages
 # In-memory message queues
 pending_messages = []
 pending_ignored_messages = []
-last_message_time = datetime.datetime.now()
+last_actual_message_time = datetime.datetime.now()
 save_task = None
+backup_task = None
 
 
 class EncryptedTcpClient:
@@ -238,100 +241,167 @@ def save_messages_to_file(messages, filename):
         )
 
 
+def create_backup_path(date_obj):
+    """Create backup path based on date: data/backup/YYYY/MM/filename_YYYY-MM-DD.json"""
+    year = date_obj.strftime("%Y")
+    month = date_obj.strftime("%m")
+    day = date_obj.strftime("%Y-%m-%d")
+
+    backup_dir = os.path.join(BACKUP_BASE_DIR, year, month)
+    os.makedirs(backup_dir, exist_ok=True)
+
+    return backup_dir, day
+
+
+def backup_file(source_file, date_obj):
+    """Create a backup of the source file with organized folder structure."""
+    if not os.path.exists(source_file):
+        log_message(
+            f"[BACKUP] Source file {source_file} doesn't exist, skipping backup",
+            "WARNING",
+        )
+        return
+
+    try:
+        backup_dir, day = create_backup_path(date_obj)
+
+        base_filename = os.path.splitext(os.path.basename(source_file))[0]
+        backup_filename = f"{base_filename}_{day}.json"
+        backup_path = os.path.join(backup_dir, backup_filename)
+
+        shutil.copy2(source_file, backup_path)
+        log_message(f"[BACKUP] Created backup: {backup_path}", "INFO")
+
+        if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+            asyncio.create_task(
+                send_telegram_message(
+                    f"Daily backup created: {backup_filename}",
+                    TELEGRAM_BOT_TOKEN,
+                    TELEGRAM_CHAT_ID,
+                )
+            )
+
+    except Exception as e:
+        log_message(f"[BACKUP] Failed to create backup for {source_file}: {e}", "ERROR")
+
+
+async def daily_backup_task():
+    """Task that runs daily to create backups of message files."""
+    last_backup_date = None
+
+    while True:
+        try:
+            current_date = datetime.datetime.now().date()
+
+            if last_backup_date != current_date:
+                log_message("[BACKUP] Starting daily backup process", "INFO")
+
+                backup_file(MESSAGES_FILE, current_date)
+                backup_file(IGNORED_MESSAGES_FILE, current_date)
+
+                last_backup_date = current_date
+                log_message("[BACKUP] Daily backup process completed", "INFO")
+
+            await asyncio.sleep(3600)
+
+        except Exception as e:
+            log_message(f"[BACKUP] Error in daily backup task: {e}", "ERROR")
+            await asyncio.sleep(3600)
+
+
 connected_clients = set()
 tcp_client = None
 
 
 async def handle_websocket(websocket, path):
     """Handle WebSocket connections and messages."""
-    global last_message_time, pending_messages, pending_ignored_messages, tcp_client
+    global last_actual_message_time, pending_messages, pending_ignored_messages, tcp_client
 
     connected_clients.add(websocket)
     ignore_list = load_ignore_list()
 
     try:
         async for message in websocket:
-            last_message_time = datetime.datetime.now()
             data = json.loads(message)
 
             # ping (1) & pong (2)
             if data == "[1":
                 await websocket.send("[2")
+                continue
             elif data.get("request_old_messages", False):
+                last_actual_message_time = datetime.datetime.now()
                 old_messages = load_messages(MESSAGES_FILE)
                 for msg in old_messages:
                     msg["old_message"] = True
                 await websocket.send(json.dumps(old_messages))
+                continue
+
+            last_actual_message_time = datetime.datetime.now()
+
+            sender = data.get("sender", "Unknown - Sender")
+            name = data.get("name", "Unknown - Sender Name")
+            message_type = data.get("type", "default")
+            ticker = data.get("ticker", "")
+            target = data.get("target", None)
+            shares = data.get("shares", None)
+            timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")).strftime(
+                "%Y-%m-%d %H:%M:%S.%f"
+            )
+
+            if not ticker or ticker == "":
+                continue
+
+            message_data = {
+                "sender": sender,
+                "name": name,
+                "type": message_type,
+                "timestamp": timestamp,
+                "ticker": ticker,
+                "old_message": False,
+            }
+
+            if shares:
+                message_data["shares"] = shares
+
+            if target:
+                message_data["target"] = target
+
+            if should_ignore_message(sender, ticker, ignore_list):
+                pending_ignored_messages.append(message_data)
+                log_message(f"Ignored message: {message_data}", "INFO")
             else:
-                sender = data.get("sender", "Unknown - Sender")
-                name = data.get("name", "Unknown - Sender Name")
-                message_type = data.get("type", "default")
-                ticker = data.get("ticker", "")
-                target = data.get("target", None)
-                shares = data.get("shares", None)
-                timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")).strftime(
-                    "%Y-%m-%d %H:%M:%S.%f"
+                # Forward the message to the TCP server first
+                if tcp_client and tcp_client.connected:
+                    if not data.get("processed", False):
+                        tcp_client.send_message(message_data)
+                else:
+                    log_message("TCP_CLIENT isn't Connected check why", "CRITICAL")
+
+                broadcast_message = json.dumps(message_data)
+                await asyncio.gather(
+                    *[client.send(broadcast_message) for client in connected_clients]
                 )
 
-                if not ticker or ticker == "":
-                    continue
+                pending_messages.append(message_data)
 
-                message_data = {
-                    "sender": sender,
-                    "name": name,
-                    "type": message_type,
-                    "timestamp": timestamp,
-                    "ticker": ticker,
-                    "old_message": False,
-                }
+                message = (
+                    f"<b>New Message Received</b>\n\n"
+                    f"<b>Ticker:</b> {message_data['ticker'].upper()}\n"
+                    f"<b>Sender:</b> {message_data['sender']}\n"
+                    f"<b>Name:</b> {message_data['name']}\n"
+                    f"<b>Type:</b> {message_data['type']}\n"
+                    f"<b>Timestamp:</b> {message_data['timestamp']}\n"
+                )
 
-                if shares:
-                    message_data["shares"] = str(shares)
-                    message_data.pop("timestamp")
-                    message_data.pop("old_message")
-
-                if target:
-                    message_data["target"] = target
-
-                if should_ignore_message(sender, ticker, ignore_list):
-                    pending_ignored_messages.append(message_data)
-                    log_message(f"Ignored message: {message_data}", "INFO")
-                else:
-                    # Forward the message to the TCP server first
-                    if tcp_client and tcp_client.connected:
-                        if not data.get("processed", False):
-                            tcp_client.send_message(message_data)
-                    else:
-                        log_message("TCP_CLIENT isn't Connected check why", "CRITICAL")
-
-                    broadcast_message = json.dumps(message_data)
-                    await asyncio.gather(
-                        *[
-                            client.send(broadcast_message)
-                            for client in connected_clients
-                        ]
+                asyncio.create_task(
+                    send_telegram_message(
+                        message,
+                        TELEGRAM_BOT_TOKEN,
+                        TELEGRAM_CHAT_ID,
                     )
+                )
 
-                    pending_messages.append(message_data)
-
-                    message = (
-                        f"<b>New Message Received</b>\n\n"
-                        f"<b>Ticker:</b> {message_data['ticker'].upper()}\n"
-                        f"<b>Sender:</b> {message_data['sender']}\n"
-                        f"<b>Name:</b> {message_data['name']}\n"
-                        f"<b>Type:</b> {message_data['type']}\n"
-                        f"<b>Timestamp:</b> {message_data['timestamp']}\n"
-                    )
-
-                    asyncio.create_task(
-                        send_telegram_message(
-                            message,
-                            TELEGRAM_BOT_TOKEN,
-                            TELEGRAM_CHAT_ID,
-                        )
-                    )
-
-                log_message(f"[WS] [{timestamp}] - RECEIVED - {data}", "INFO")
+            log_message(f"[WS] [{timestamp}] - RECEIVED - {data}", "INFO")
 
     except websockets.ConnectionClosed:
         log_message("[WS] WebSocket connection closed", "INFO")
@@ -342,16 +412,16 @@ async def handle_websocket(websocket, path):
 
 
 async def save_messages_after_delay():
-    """Save pending messages after a delay if no new messages arrive."""
+    """Save pending messages after a delay if no new actual messages arrive."""
     global pending_messages, pending_ignored_messages
 
     while True:
         await asyncio.sleep(SAVE_DELAY)
         time_since_last_message = (
-            datetime.datetime.now() - last_message_time
+            datetime.datetime.now() - last_actual_message_time
         ).total_seconds()
 
-        # If enough time has passed, save the pending messages
+        # If enough time has passed since last actual message, save the pending messages
         if time_since_last_message >= SAVE_DELAY:
             if pending_messages:
                 messages_to_save = pending_messages.copy()
@@ -369,8 +439,8 @@ async def save_messages_after_delay():
 
 
 async def main():
-    """Start the WebSocket server, TCP client, and background save task."""
-    global tcp_client
+    """Start the WebSocket server, TCP client, backup task, and background save task."""
+    global tcp_client, backup_task
 
     # Initialize and start TCP client in a separate thread
     tcp_client = EncryptedTcpClient(
@@ -381,6 +451,7 @@ async def main():
     )
     tcp_client.start()  # Start in a separate thread
     save_task = asyncio.create_task(save_messages_after_delay())
+    backup_task = asyncio.create_task(daily_backup_task())
 
     server = await websockets.serve(
         handle_websocket, WS_HOST, WS_PORT, ping_interval=None, ping_timeout=None
@@ -391,6 +462,7 @@ async def main():
     log_message(
         f"Messages will be saved after {SAVE_DELAY} seconds of inactivity", "INFO"
     )
+    log_message("Daily backup task started", "INFO")
 
     try:
         await server.wait_closed()
@@ -399,6 +471,13 @@ async def main():
             save_task.cancel()
             try:
                 await save_task
+            except asyncio.CancelledError:
+                pass
+
+        if backup_task:
+            backup_task.cancel()
+            try:
+                await backup_task
             except asyncio.CancelledError:
                 pass
 

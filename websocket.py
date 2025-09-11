@@ -445,7 +445,7 @@ async def main():
         shared_secret=TCP_SECRET,
         username=TCP_USERNAME,
     )
-    tcp_client.start()  # Start in a separate thread
+    tcp_client.connect()
     save_task = asyncio.create_task(save_messages_after_delay())
     backup_task = asyncio.create_task(daily_backup_task())
 

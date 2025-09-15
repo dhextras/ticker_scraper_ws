@@ -183,7 +183,7 @@ class EncryptedTcpClient:
 
     def _heartbeat_loop(self):
         while not self.stop_event.is_set():
-            time.sleep(5)
+            time.sleep(30)
             self.send_message("HEARTBEAT")
 
 

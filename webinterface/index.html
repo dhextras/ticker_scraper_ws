@@ -5,24 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebSocket Message Table - Login</title>
     <style>
+      :root {
+        --bg-color: #f4f4f9;
+        --text-color: #333;
+        --card-bg: white;
+        --border-color: #ddd;
+        --button-primary: #4caf50;
+        --button-primary-hover: #45a049;
+        --button-danger: #f44336;
+        --button-danger-hover: #d32f2f;
+        --table-header-bg: #f2f2f2;
+        --table-header-hover: #e6e6e6;
+        --shadow: rgba(0, 0, 0, 0.1);
+        --menu-hover: #f5f5f5;
+        --menu-active-bg: #e8f5e9;
+        --menu-active-color: #4caf50;
+      }
+
+      [data-theme="dark"] {
+        --bg-color: #1a1f2e;
+        --text-color: #e8eaed;
+        --card-bg: #242b3d;
+        --border-color: #3a4458;
+        --button-primary: #64b5f6;
+        --button-primary-hover: #42a5f5;
+        --button-danger: #ff7043;
+        --button-danger-hover: #ff5722;
+        --table-header-bg: #2d3748;
+        --table-header-hover: #3a4458;
+        --shadow: rgba(0, 0, 0, 0.3);
+        --menu-hover: #2d3748;
+        --menu-active-bg: #1e2a3a;
+        --menu-active-color: #64b5f6;
+      }
+
       body {
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 20px;
-        background-color: #f4f4f9;
+        background-color: var(--bg-color);
+        color: var(--text-color);
         display: flex;
         justify-content: center;
         align-items: center;
         min-height: 100vh;
+        transition:
+          background-color 0.3s ease,
+          color 0.3s ease;
       }
       .login-container {
         flex-direction: column;
-        background-color: white;
+        background-color: var(--card-bg);
         padding: 30px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px var(--shadow);
         max-width: 400px;
         width: 100%;
+        transition: background-color 0.3s ease;
       }
       .login-form {
         display: flex;
@@ -36,39 +75,46 @@
       }
       label {
         font-weight: bold;
-        color: #333;
+        color: var(--text-color);
       }
       input {
         padding: 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         font-size: 16px;
+        background-color: var(--card-bg);
+        color: var(--text-color);
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          color 0.3s ease;
       }
       button {
         padding: 12px 16px;
-        background-color: #4caf50;
+        background-color: var(--button-primary);
         color: white;
         border: none;
         border-radius: 4px;
         cursor: pointer;
         font-size: 16px;
+        transition: background-color 0.3s ease;
       }
       button:hover {
-        background-color: #45a049;
+        background-color: var(--button-primary-hover);
       }
       button:disabled {
         background-color: #cccccc;
         cursor: not-allowed;
       }
       .error {
-        color: #f44336;
+        color: var(--button-danger);
         font-size: 14px;
         margin-top: 5px;
       }
       .title {
         text-align: center;
         margin-bottom: 30px;
-        color: #333;
+        color: var(--text-color);
       }
       .app-container {
         display: none;
@@ -79,37 +125,76 @@
         gap: 10px;
         margin-bottom: 20px;
         padding: 15px;
-        background-color: white;
+        background-color: var(--card-bg);
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px var(--shadow);
+        transition: background-color 0.3s ease;
       }
       .menu-container {
         position: absolute;
         top: 20px;
         right: 20px;
         z-index: 1000;
+        display: flex;
+        gap: 10px;
+        align-items: center;
       }
       .menu-button {
-        background: #4caf50;
+        background: var(--button-primary);
         color: white;
         border: none;
-        padding: 10px 15px;
+        padding: 7px 15px;
         border-radius: 4px;
         cursor: pointer;
         font-size: 18px;
+        transition: background-color 0.3s ease;
       }
       .menu-button:hover {
-        background: #45a049;
+        background: var(--button-primary-hover);
+      }
+      .theme-toggle {
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 20px;
+        padding: 1px 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 60px;
+        height: 30px;
+        position: relative;
+        transition: all 0.3s ease;
+      }
+      .theme-toggle::before {
+        content: "";
+        position: absolute;
+        top: 5.2px;
+        left: 3px;
+        width: 22px;
+        height: 22px;
+        background: var(--button-primary);
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+      }
+      [data-theme="dark"] .theme-toggle::before {
+        transform: translateX(42px);
+      }
+      .theme-toggle span {
+        font-size: 14px;
+        z-index: 1;
       }
       .menu-dropdown {
         display: none;
         position: absolute;
         right: 0;
         top: 100%;
-        background: white;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        background: var(--card-bg);
+        box-shadow: 0 2px 10px var(--shadow);
         border-radius: 4px;
         min-width: 200px;
+        border: 1px solid var(--border-color);
+        transition: background-color 0.3s ease;
       }
       .menu-dropdown.show {
         display: block;
@@ -118,15 +203,18 @@
         display: block;
         padding: 10px 15px;
         text-decoration: none;
-        color: #333;
-        border-bottom: 1px solid #eee;
+        color: var(--text-color);
+        border-bottom: 1px solid var(--border-color);
+        transition:
+          background-color 0.3s ease,
+          color 0.3s ease;
       }
       .menu-item:hover {
-        background: #f5f5f5;
+        background: var(--menu-hover);
       }
       .menu-item.active {
-        background: #e8f5e9;
-        color: #4caf50;
+        background: var(--menu-active-bg);
+        color: var(--menu-active-color);
         font-weight: bold;
       }
       .menu-item:last-child {
@@ -147,37 +235,57 @@
         font-size: 14px;
         width: auto;
         min-width: 80px;
+        background-color: var(--card-bg);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          color 0.3s ease;
       }
       table {
         width: 100%;
         border-collapse: collapse;
         margin: 20px 0;
-        background-color: white;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        background-color: var(--card-bg);
+        box-shadow: 0 2px 4px var(--shadow);
+        transition: background-color 0.3s ease;
       }
       table,
       th,
       td {
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-color);
       }
       th,
       td {
         padding: 12px;
         text-align: left;
+        color: var(--text-color);
+        transition:
+          color 0.3s ease,
+          background-color 0.3s ease;
       }
       th {
-        background-color: #f2f2f2;
+        background-color: var(--table-header-bg);
         cursor: pointer;
+        transition: background-color 0.3s ease;
       }
       th:hover {
-        background-color: #e6e6e6;
+        background-color: var(--table-header-hover);
       }
       select {
         padding: 8px;
         margin-right: 10px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         width: 200px;
+        background-color: var(--card-bg);
+        color: var(--text-color);
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          color 0.3s ease;
       }
       .pagination {
         display: flex;
@@ -187,12 +295,13 @@
         margin-top: 20px;
       }
       .pagination button {
-        background-color: white;
-        color: #4caf50;
-        border: 1px solid #4caf50;
+        background-color: var(--card-bg);
+        color: var(--button-primary);
+        border: 1px solid var(--button-primary);
+        transition: all 0.3s ease;
       }
       .pagination button.active {
-        background-color: #4caf50;
+        background-color: var(--button-primary);
         color: white;
       }
       .pagination button:disabled {
@@ -207,10 +316,11 @@
         border-radius: 4px;
         cursor: pointer;
         font-size: 21px;
-        background-color: #f44336;
+        background-color: var(--button-danger);
+        transition: background-color 0.3s ease;
       }
       .logout-btn:hover {
-        background-color: #d32f2f;
+        background-color: var(--button-danger-hover);
       }
 
       @media (max-width: 1200px) {
@@ -288,6 +398,14 @@
 
       <div class="controls-container">
         <div class="menu-container">
+          <div
+            class="theme-toggle"
+            id="theme-toggle"
+            title="Toggle dark/light mode"
+          >
+            <span>🌙</span>
+            <span>☀️</span>
+          </div>
           <button id="menu-button" class="menu-button">☰</button>
           <button id="logout-btn" class="logout-btn">Logout</button>
           <div id="menu-dropdown" class="menu-dropdown">

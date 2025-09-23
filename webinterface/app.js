@@ -61,14 +61,84 @@ window.initApp = async function () {
     return target[0];
   };
 
-  // Populate sender dropdowns
-  Object.entries(config.senders).forEach(([key, { name }]) => {
+  const getColorForTheme = (senderConfig) => {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    if (currentTheme === "dark" && senderConfig.darkColor) {
+      return senderConfig.darkColor;
+    }
+    return senderConfig.lightColor || senderConfig.color || "#FFFFFF";
+  };
+
+  const getTextColor = (backgroundColor) => {
+    const hex = backgroundColor.replace("#", "");
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Return black for light backgrounds, white for dark backgrounds
+    return luminance > 0.5 ? "#000000" : "#FFFFFF";
+  };
+
+  Object.entries(config.senders).forEach(([key, senderConfig]) => {
+    const { name } = senderConfig;
+    const backgroundColor = getColorForTheme(senderConfig);
+    const textColor = getTextColor(backgroundColor);
+
     [senderDropdown, senderFilter].forEach((dropdown) => {
       const option = document.createElement("option");
       option.value = key;
       option.textContent = name;
+      option.style.backgroundColor = backgroundColor;
+      option.style.color = textColor;
       dropdown.appendChild(option);
     });
+  });
+
+  const updateDropdownBackground = (dropdown) => {
+    const selectedOption = dropdown.options[dropdown.selectedIndex];
+    if (selectedOption && selectedOption.value) {
+      const senderConfig = config.senders[selectedOption.value];
+      if (senderConfig) {
+        const backgroundColor = getColorForTheme(senderConfig);
+        const textColor = getTextColor(backgroundColor);
+        dropdown.style.backgroundColor = backgroundColor;
+        dropdown.style.color = textColor;
+      }
+    } else {
+      dropdown.style.backgroundColor = "";
+      dropdown.style.color = "";
+    }
+  };
+
+  senderDropdown.addEventListener("change", () =>
+    updateDropdownBackground(senderDropdown),
+  );
+  senderFilter.addEventListener("change", () =>
+    updateDropdownBackground(senderFilter),
+  );
+
+  const themeObserver = new MutationObserver(() => {
+    [senderDropdown, senderFilter].forEach((dropdown) => {
+      Array.from(dropdown.options).forEach((option) => {
+        if (option.value && config.senders[option.value]) {
+          const senderConfig = config.senders[option.value];
+          const backgroundColor = getColorForTheme(senderConfig);
+          const textColor = getTextColor(backgroundColor);
+          option.style.backgroundColor = backgroundColor;
+          option.style.color = textColor;
+        }
+      });
+      updateDropdownBackground(dropdown);
+    });
+
+    refreshTable();
+  });
+
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
   });
 
   // Populate target dropdown
@@ -213,6 +283,7 @@ window.initApp = async function () {
       senderDropdown.selectedIndex = 0;
       typeDropdown.selectedIndex = 0;
       messageTarget.selectedIndex = 0;
+      updateDropdownBackground(senderDropdown);
     } else {
       alert("Choose a Name and a Type before sending.");
     }
@@ -380,7 +451,13 @@ window.initApp = async function () {
     tickerCell.textContent = ticker || "N/A";
     timestampCell.textContent = formatDate(timestamp);
 
-    row.style.backgroundColor = config.senders[sender]?.color || "#FFFFFF";
+    const senderConfig = config.senders[sender];
+    if (senderConfig) {
+      const backgroundColor = getColorForTheme(senderConfig);
+      const textColor = getTextColor(backgroundColor);
+      row.style.backgroundColor = backgroundColor;
+      row.style.color = textColor;
+    }
 
     row.appendChild(senderCell);
     row.appendChild(typeCell);

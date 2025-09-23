@@ -1,6 +1,23 @@
 class Auth {
   constructor() {
     this.token = localStorage.getItem("auth_token");
+    this.initializeTheme();
+  }
+
+  initializeTheme() {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    this.setTheme(savedTheme);
+  }
+
+  setTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }
+
+  toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    this.setTheme(newTheme);
   }
 
   async login(username, password) {
@@ -81,6 +98,7 @@ window.addEventListener("load", async () => {
   const loginForm = document.getElementById("login-form");
   const loginError = document.getElementById("login-error");
   const logoutBtn = document.getElementById("logout-btn");
+  const themeToggle = document.getElementById("theme-toggle");
 
   const isValid = await auth.verifyToken();
   if (isValid) {
@@ -92,7 +110,12 @@ window.addEventListener("load", async () => {
     auth.showLogin();
   }
 
-  // Handle login form
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      auth.toggleTheme();
+    });
+  }
+
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
